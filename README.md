@@ -5,6 +5,21 @@ from WRF output. It preprocesses WRF fields, detects and tracks the storm
 center, remaps WRF variables into storm-following coordinates, and diagnoses
 momentum, kinetic-energy, and potential-vorticity budgets.
 
+## Copyright
+
+Copyright (c) 2026 Yang Yu. All rights reserved unless otherwise stated.
+
+This repository also includes third-party MATLAB toolboxes and supporting data
+under `Tool_box`. Those components keep their original copyright notices,
+licenses, and citation requirements.
+
+## Contact
+
+For questions, bug reports, or collaboration requests, contact:
+
+- Email: `yang.yu@whoi.edu`
+- GitHub: `https://github.com/yangatwhoi/TC_tool`
+
 ## Repository Layout
 
 ```text
@@ -184,18 +199,3 @@ Full numerical validation requires real WRF-derived input data and a generated
 
 For scientific assumptions, equations, saved variables, and module-specific
 configuration options, read the module README files under `README/`.
-
-## Copyright
-
-Copyright (c) 2026 Yang Yu. All rights reserved unless otherwise stated.
-
-This repository also includes third-party MATLAB toolboxes and supporting data
-under `Tool_box`. Those components keep their original copyright notices,
-licenses, and citation requirements.
-
-## Contact
-
-For questions, bug reports, or collaboration requests, contact:
-
-- Email: `yang.yu@whoi.edu`
-- GitHub: `https://github.com/yangatwhoi/TC_tool`
