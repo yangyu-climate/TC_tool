@@ -1,0 +1,322 @@
+# TC_KEBG kinetic energy budget toolbox
+
+`TC_KEBG` diagnoses tropical-cyclone energetics in storm-following cylindrical
+coordinates.  The workflow follows the scale-interaction framework used by
+Krishnamurti et al. (2005, MWR) and the multiscale TC asymmetry energetics
+application of Bhalachandran et al. (2020, JAS): azimuthal fields are decomposed
+into wavenumbers, then kinetic energy (KE), available potential energy (APE),
+heating generation, APE-to-KE conversion, and mean-flow-to-eddy KE transfer are
+computed for each wavenumber.
+
+## Workflow
+
+Run from the `TC_KEBG` directory:
+
+```matlab
+Run
+```
+
+All case parameters are centralized in:
+
+```matlab
+TC_KEBG_config.m
+```
+
+Edit this file to change the analysis period, cylindrical grid, fixed-height
+levels, smoothing, spectral options, thermodynamic option, integration radius,
+or file naming.
+
+The run sequence is:
+
+1. `TC_KEBG_mvct`
+   - Reads WRF variables from `../Pre/BGT/DATA`.
+   - Reads storm center/intensity from `../TC_track/Result/Track_data.mat`.
+   - Removes TC translation speed from horizontal wind.  The zonal translation
+     speed includes the `cos(latitude)` longitude-distance correction.
+   - Interpolates fields to a storm-centered cylindrical grid.
+   - Saves `Result/Data/KEBG_*.mat`.
+
+2. `TC_KEBG_azimuthally`
+   - Loads cylindrical-grid output.
+   - Computes azimuthal means and perturbations for wind, density, pressure,
+     temperature, potential temperature, equivalent potential temperature, and
+     diabatic heating.
+   - Saves `Result/azimuthally/KEBG_*.mat`.
+
+3. `TC_KEBG_calculate`
+   - Uses FFT along the azimuthal direction to diagnose each azimuthal
+     wavenumber.
+   - Computes radius-height local terms and mass-weighted domain means.
+   - Saves `Result/KEBG/KEBG_*.mat`.
+
+## Required Inputs
+
+`TC_KEBG_mvct` expects these preprocessed WRF files in `Pre/BGT/DATA`:
+
+- Grid and state: `lon`, `lat`, `z`, `p`, `rho`
+- Winds: `u`, `v`, `w`
+- Thermodynamics: `tk`, `theta`, `thetaE`, `H_DIABATIC`
+
+The saved `H_DIABATIC` in `TC_KEBG` is a total diabatic theta tendency used for
+APE generation. `TC_KEBG_mvct` sums the available `Pre/BGT` heating tendency
+terms:
+
+- `H_DIABATIC`: microphysics latent heating
+- `RTHRATEN`: radiation theta tendency
+- `RTHBLTEN`: PBL theta tendency
+- `RTHCUTEN`: cumulus theta tendency
+
+These inputs are stored by `Pre/BGT` as `K day-1`; `TC_KEBG_mvct` converts them
+to `K s-1` before saving `Result/Data/KEBG_*.mat`, so `APE_gen` has units of
+`m^2 s^-3`. Missing optional heating files are treated as zero.
+
+The track file must contain `TIME`, `LON`, `LAT`, `SLP`, `SWD`, `LON_W`, and
+`LAT_W`.
+
+## Main Outputs
+
+`Result/KEBG/KEBG_*.mat` includes:
+
+- `WN`: diagnosed azimuthal wavenumbers.
+- `KE`: kinetic energy of each wavenumber.
+- `APE`: Lorenz-style APE proxy using potential-temperature variance.
+- `APE_gen`: APE generation by covariance of diabatic heating and temperature
+  anomaly.
+- `APE_to_KE`: baroclinic conversion from APE to KE, proportional to covariance
+  of vertical velocity and thermodynamic anomaly.
+- `BT_0_to_n`: mean-flow-to-wavenumber KE transfer from mean radial/vertical
+  shear.
+- `KE_tendency`, `APE_tendency`: finite-difference local tendencies.
+- `KE_residual`, `APE_residual`: unresolved/dissipative closure residuals.
+- `*_int`: mass-weighted domain means for each wavenumber.
+- `*_group`: grouped sums for `WN0`, `WN1_2`, `WN3_plus`, and `WN_all`.
+- `Budget_Radius`: radial range used by the integrated budget diagnostics.
+
+## Output Dimensions
+
+The saved MATLAB arrays use these dimensions:
+
+- `R`: `[1 x nR]`, radius in km.
+- `PHI`: `[1 x nPhi]`, azimuth angle in radians.
+- `WN`: `[1 x nWN]`, diagnosed azimuthal wavenumber list.
+- `z`, `r`, `P`, `u`, `v`, `w`, `theta`, `thetaE`, `H_DIABATIC` in
+  `Result/Data`: `[nZ x nPhi x nR]`.
+- Mean fields from `Result/azimuthally`, such as `um`, `vm`, `wm`, `thm`,
+  `thEm`, and `Hm`: `[nZ x 1 x nR]`.
+- Eddy fields from `Result/azimuthally`, such as `up`, `vp`, `wp`, `thp`,
+  `thEp`, and `Hp`: `[nZ x nPhi x nR]`.
+- `z`, `r`, `P`, `ape_coef`, and `mass_weight` in `Result/KEBG`:
+  `[nZ x nR]`.
+- `theta_ref` and `N2_ref`: `[nZ x 1]`.
+- Local spectral diagnostics `KE`, `APE`, `APE_gen`, `APE_to_KE`,
+  `BT_0_to_n`, `KE_tendency`, `APE_tendency`, `KE_residual`, and
+  `APE_residual`: `[nZ x nR x nWN]`.
+- Integrated diagnostics ending in `_int`: `[1 x nWN]`.
+- Grouped diagnostics ending in `_group`: `[1 x 4]`, ordered as `WN0`,
+  `WN1_2`, `WN3_plus`, and `WN_all`.
+- Scalars such as `dR`, `dPhi`, `dr`, `dt`, `Max_WN`, `Budget_Radius`, and
+  `TIME`: `[1 x 1]`.
+
+The `_int` and `_group` variables are mass-weighted means over the radius range
+`0-Budget_Radius` only. With the default settings this is `0-100 km`.
+
+## Method Notes
+
+- TC translation speed is calculated from the wind-smoothed track positions
+  `LON_W` and `LAT_W` using a centered finite difference:
+  `dLON/dt` and `dLAT/dt`.
+- The zonal translation component is
+  `TC_U = dLON/dt * 111.2 km/degree * cos(lat_mid)`, converted to m/s.
+  The meridional component is
+  `TC_V = dLAT/dt * 111.2 km/degree`, converted to m/s.
+- The translation speed is smoothed after differencing. The smoothing window is
+  derived from `TC_smooth_hours`:
+  `TC_smooth_window = max(1, 2*floor((TC_smooth_hours*60/Time_frq)/2)+1)`.
+  This keeps the window odd for centered running mean. With
+  `TC_smooth_hours = 1`, 15-minute output uses 5 points, while 60-minute output
+  uses 1 point.
+- Storm-relative horizontal wind is then computed before vector rotation:
+  `u = u - TC_U`, `v = v - TC_V`.
+- The default thermodynamic variable is `theta` (`Use_thetaE = 0` in
+  `TC_KEBG_config.m`) because the APE formulation is most direct in potential
+  temperature.  Set `Use_thetaE = 1` for a moist-entropy proxy based on
+  `thetaE`.
+- APE is represented as
+  `0.5 * (g^2 / (N^2 * theta_ref^2)) * theta'^2`.
+- APE generation uses the same coefficient multiplying the spectral covariance
+  of diabatic heating and thermodynamic anomaly.
+- APE-to-KE conversion is positive for warm rising/cold sinking covariance:
+  `(g / theta_ref) * <w_n theta'_n>`.
+- `BT_0_to_n` is a shear-production approximation to the mean-to-eddy KE
+  transfer used in the papers.  It keeps the dominant storm-centered mean-flow
+  energy pathway while avoiding a hard dependency on pressure-coordinate omega.
+
+## Detailed Calculation
+
+1. Storm-centered remapping
+
+   `TC_KEBG_mvct` finds the TC center at each analysis time from
+   `Track_data.mat`. Each WRF grid point is assigned a storm-centered Cartesian
+   distance `(x,y)`. The horizontal wind is first made storm-relative, then
+   transformed into cylindrical components:
+
+   - `u`: radial wind, positive outward.
+   - `v`: tangential wind, positive cyclonic in the transformed coordinate.
+   - `w`: vertical velocity from WRF.
+
+   The fields are interpolated from native WRF coordinates to `(PHI,R)` and
+   saved at each model level.
+
+2. Mean and perturbation split
+
+   `TC_KEBG_azimuthally` computes azimuthal means with `nanmean(...,2)` and
+   perturbations as `field' = field - <field>`. It saves both the full fields
+   and the mean/eddy fields so later diagnostics can use either physical-space
+   covariances or spectral covariances.
+
+3. Wavenumber decomposition
+
+   `TC_KEBG_calculate` uses FFT along the azimuthal dimension. For two fields
+   `a` and `b`, the spectral covariance at wavenumber `n` is:
+
+   - `n = 0`: `real(A0 * conj(B0))`
+   - `n > 0`: `2 * real(An * conj(Bn))`
+
+   where `A` and `B` are FFT coefficients normalized by the number of azimuthal
+   points. Before FFT, isolated NaN values along each azimuthal ring are filled
+   by that ring's mean so one missing point does not contaminate the whole
+   spectrum.
+
+4. KE and APE terms
+
+   The toolbox computes KE and APE locally on each radius-height grid point and
+   for each azimuthal wavenumber. This follows the paper logic that the
+   hurricane-scale mean flow (`WN0`), persistent vortex-scale asymmetries
+   (`WN1_2`), and smaller transient asymmetries (`WN3_plus`) can exchange and
+   convert energy differently.
+
+   For a field pair `a` and `b`, `<a_n b_n>` means the spectral covariance at
+   wavenumber `n`, not a simple physical-space product. It is calculated from
+   FFT coefficients as described above.
+
+   Kinetic energy is calculated from radial, tangential, and vertical wind:
+
+   `KE_n = 0.5 * (<u_n u_n> + <v_n v_n> + <w_n w_n>)`
+
+   Here `u`, `v`, and `w` are storm-relative cylindrical velocity components.
+   `KE_n` has units of `m^2 s^-2`. The domain-mean tendency and conversion
+   terms have units of `m^2 s^-3`.
+
+   APE is calculated from thermodynamic variance. By default the thermodynamic
+   variable is potential temperature `theta`. The code also allows `thetaE`
+   as a moist-entropy proxy by setting `Use_thetaE = 1`, but the default
+   `theta` is closer to the Lorenz APE form.
+
+   The reference potential temperature profile `theta_ref(z)` is computed as
+   the horizontal mass-weighted mean at each model level, using `rho*r` as the
+   cylindrical weight. The same weight is used for the reference height profile
+   used in the vertical derivative. The static stability is:
+
+   `N^2 = (g / theta_ref) * d(theta_ref)/dz`
+
+   Very small or negative `N^2` values are limited by `min_N2` to avoid
+   unrealistically large APE in weakly stable or noisy layers.
+
+   The APE coefficient is:
+
+   `C_APE = g^2 / (N^2 * theta_ref^2)`
+
+   Local APE for wavenumber `n` is:
+
+   `APE_n = 0.5 * C_APE * <theta'_n theta'_n>`
+
+   where `theta' = theta - theta_ref(z)`. `APE_n` also has units of
+   `m^2 s^-2`.
+
+   Diabatic generation of APE is:
+
+   `APE_gen_n = C_APE * <H'_n theta'_n>`
+
+   `H` is the total diabatic theta tendency saved as `H_DIABATIC` by
+   `TC_KEBG_mvct`, converted from `K day-1` source files to `K s-1`. `H'` is
+   formed by removing the level mass-weighted mean. Positive `APE_gen_n` means
+   diabatic heating is correlated with warm anomalies, increasing APE at that
+   wavenumber.
+
+   Baroclinic conversion from APE to KE is:
+
+   `APE_to_KE_n = (g / theta_ref) * <w_n theta'_n>`
+
+   Positive `APE_to_KE_n` means warm rising or cold sinking motion converts APE
+   into kinetic energy.
+
+   The sign convention in the saved files is:
+
+   - Positive `APE_gen`: APE is produced by heating.
+   - Positive `APE_to_KE`: APE is converted into KE.
+   - In the APE budget, `APE_to_KE` is therefore a sink.
+   - In the KE budget, `APE_to_KE` is a source.
+
+5. Mean-flow KE transfer
+
+   `BT_0_to_n` estimates mean-flow-to-eddy KE transfer from the interaction of
+   eddy Reynolds stresses with mean radial and vertical shear:
+
+   `BT_0_to_n = -<u'u'> dU/dr - <u'v'> (dV/dr - V/r)
+                -<w'u'> dU/dz - <w'v'> dV/dz`
+
+   Positive values indicate KE transfer from the azimuthal-mean flow to the
+   selected wavenumber. For `WN0`, this term is saved as zero because it is
+   specifically a mean-to-eddy transfer diagnostic.
+
+   This term is a shear-production approximation to the full pressure-coordinate
+   spectral interaction terms in Krishnamurti et al. (2005). It keeps the
+   dominant storm-centered KE pathway while using the height-coordinate WRF
+   variables available in this toolbox.
+
+6. Tendency and residual
+
+   KE and APE tendencies are computed from neighboring analysis files. The code
+   uses fourth-order centered differencing when two files exist on both sides,
+   otherwise it falls back to second-order centered, second-order one-sided, or
+   first-order one-sided differencing near boundaries.
+
+   Closure residuals are saved as:
+
+   - `KE_residual = KE_tendency - BT_0_to_n - APE_to_KE`
+   - `APE_residual = APE_tendency - APE_gen + APE_to_KE`
+
+   These residuals include unresolved processes not explicitly represented in
+   the simplified height-coordinate diagnostic: frictional dissipation,
+   pressure-work terms, numerical diffusion, boundary interpolation effects,
+   and any mismatch between `H_DIABATIC` and the selected thermodynamic
+   variable.
+
+7. Mass-weighted integration
+
+   Local radius-height terms are integrated from 0 to `Budget_Radius`
+   (`100 km` by default). The mass weight uses density multiplied by the exact
+   annulus area of each radial bin and the half-level vertical layer thickness;
+   the outer annulus is clipped at `Budget_Radius`. The toolbox saves both
+   individual wavenumber means (`*_int`) and grouped values (`*_group`) for
+   `WN0`, `WN1_2`, `WN3_plus`, and `WN_all`.
+
+   By default `Max_WN = Inf`, so `WN_all` and `WN3_plus` include all resolvable
+   azimuthal wavenumbers up to the Nyquist wavenumber. If `Max_WN` is set to a
+   finite number for speed, the grouped values include only diagnosed
+   wavenumbers.
+
+## Typical Edits
+
+- Change parameters in `TC_KEBG_config.m`.
+- Use `Time_beg`, `Time_end`, `Time_frq`, `Radius`, `dR`, and `dPhi` for the
+  remapping period and cylindrical grid.
+- Use `Tendency_frq` for the neighboring file interval in finite-difference
+  KE/APE tendency diagnostics.
+- Change `TC_smooth_hours` and `TC_smooth_pass` if the TC
+  translation speed is noisy.  The default is 1-hour, 1-pass smoothing to reduce
+  path wobble and artificial acceleration.
+- Change `Max_WN` and `Use_thetaE` for the spectral/thermodynamic options.
+- Change `Budget_Radius` to alter the radial range of
+  the integrated budget. The default is 0-100 km.
+- If fixed-height diagnostics are needed, set `IF_Zfix = 1`.

@@ -1,0 +1,21 @@
+# Runtime logs
+running.out
+*.log
+
+# WRF/preprocessed data directories
+Pre/*/DATA/
+
+# Module runtime outputs
+TC_track/Data/
+TC_track/Fig/
+TC_track/Result/
+TC_Rfield/Result/
+TC_MBG/Result/
+TC_KEBG/Result/
+TC_PVBG/Result/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*.asv
+*.m~

@@ -1,0 +1,265 @@
+TC_Rfield toolbox
+=================
+
+Purpose
+-------
+
+TC_Rfield extracts storm-following radial structure fields from WRF output. It
+uses the TC_track result to move into the tropical-cyclone frame, interpolates
+WRF variables to a storm-centered Cartesian grid, and then produces radial and
+selected-level diagnostics.
+
+
+Directory
+---------
+
+TC_Rfield contains:
+
+- Run.m
+- Run.sh
+- TC_Rfield_mvct.m
+- TC_Rfield_slice.m
+- TC_Rfield_vlevel.m
+
+Run.m is the normal MATLAB entry point:
+
+1. TC_Rfield_mvct
+2. TC_Rfield_slice
+3. TC_Rfield_vlevel
+
+
+Input Requirements
+------------------
+
+Before running TC_Rfield, the following inputs must exist:
+
+- ../TC_track/Result/Track_data.mat
+- ../Pre/PHY/DATA
+
+Track_data.mat should contain:
+
+- TIME
+- LON
+- LAT
+- SLP
+- SWD
+- LON_W
+- LAT_W
+
+Pre/PHY/DATA should contain WRF-derived NetCDF files using the selected domain
+prefix, currently `wrfout_d03`.
+
+
+Workflow
+--------
+
+1. TC_Rfield_mvct.m
+
+   Builds storm-following Cartesian fields.
+
+   Main operations:
+
+   - Reads the track from ../TC_track/Result/Track_data.mat.
+   - Reads WRF dynamic, thermodynamic, moisture, radiation, surface flux, and
+     diabatic-heating variables from ../Pre/PHY/DATA.
+   - Estimates TC translation speed from the smoothed track.
+   - Removes TC translation speed from horizontal winds.
+   - Converts wind from Cartesian to cylindrical storm-relative components.
+   - Interpolates variables to a storm-centered x/y grid.
+   - Saves output to TC_Rfield/Result/MVCT.
+
+   Important output variables:
+
+   - x, y, r, z, P
+   - u, v, w, uc, vc
+   - M, avo, pvo, rvo
+   - rho, theta, thetaE, DethDz
+   - H_DIABATIC
+   - Qv, Qc, Qr, Qi, Qs, Qg, QW, QI
+   - U10, V10, SLP, pblh, GLW, GSW, LHF, SHF, SST
+
+2. TC_Rfield_slice.m
+
+   Converts gridded storm-following fields into radius-height composites.
+
+   Main operations:
+
+   - Reads TC_Rfield/Result/MVCT.
+   - Averages fields in radial rings.
+   - Splits diabatic heating into positive and negative components.
+   - Saves output to TC_Rfield/Result/SLICE.
+
+3. TC_Rfield_vlevel.m
+
+   Interpolates storm-following fields to selected vertical levels.
+
+   Main operations:
+
+   - Reads TC_Rfield/Result/MVCT.
+   - Interpolates fields to `level_slect`.
+   - Supports height levels (`level_type = 0`) or pressure levels
+     (`level_type = 1`).
+   - Saves output to TC_Rfield/Result/VLEVEL.
+
+
+Outputs
+-------
+
+TC_Rfield writes:
+
+- TC_Rfield/Result/MVCT
+- TC_Rfield/Result/SLICE
+- TC_Rfield/Result/VLEVEL
+
+The file prefix is currently `RF_YYYY-MM-DD_HH:MM:SS.mat`.
+
+
+Important Parameters
+--------------------
+
+Edit `TC_Rfield_config.m` before applying the toolbox to another case.
+
+Shared time parameters:
+
+- Time_beg
+- Time_end
+- Time_frq
+
+MVCT parameters:
+
+- Radius
+- dR
+- rough_dist
+- rough_reso
+- Head_nam
+
+Slice parameters:
+
+- smooth_dR
+
+Vertical-level parameters:
+
+- level_type
+- level_slect
+
+
+Current Check Result
+--------------------
+
+Checked with MATLAB R2021b on 2026-06-17.
+
+Result:
+
+- Run.m now calls only existing TC_Rfield scripts.
+- MATLAB syntax/checkcode parse completed for TC_Rfield_mvct.m,
+  TC_Rfield_slice.m, and TC_Rfield_vlevel.m.
+- TC translation speed uses a cos(latitude) correction for longitude distance
+  before removing the storm motion from horizontal winds.
+- TC translation speed smoothing is configurable with `TC_smooth_hours` and
+  `TC_smooth_pass` in `TC_Rfield_config.m`. The default is 1-hour, 1-pass smoothing
+  to reduce path wobble and artificial acceleration.
+- The reported checkcode messages are mostly old MATLAB style, preallocation,
+  nanmean/nansum recommendations, and griddata performance suggestions.
+- The current workspace does not contain ../TC_track/Result/Track_data.mat or
+  ../Pre/PHY/DATA, so a full numerical run could not be performed in this
+  checkout.
+
+
+Detailed Calculation Notes
+--------------------------
+
+1. TC translation speed
+
+   TC_Rfield estimates the storm motion from `LON_W` and `LAT_W` in
+   `Track_data.mat`. Interior times use a centered finite difference. The zonal
+   speed uses a cos(latitude) correction:
+
+   `TC_U = dLON/dt * 111.2 km/degree * cos(lat_mid)`
+
+   The meridional speed is:
+
+   `TC_V = dLAT/dt * 111.2 km/degree`
+
+   Both components are converted to m/s. The resulting translation velocity is
+   smoothed using:
+
+   `TC_smooth_window = max(1, 2*floor((TC_smooth_hours*60/Time_frq)/2)+1)`
+
+   With the default `TC_smooth_hours = 1`, 15-minute data use 5 points and
+   60-minute data use 1 point.
+
+2. Moving-frame gridding
+
+   The WRF wind is made storm-relative:
+
+   - `u_cart = u_wrf - TC_U`
+   - `v_cart = v_wrf - TC_V`
+
+   The script builds a storm-centered Cartesian grid `(x,y)` with spacing
+   `resolution`. If the TC center lies exactly on the WRF grid and
+   `rough_dist = 1`, distances are computed from grid spacing for speed.
+   Otherwise, geodesic distance from `distbear` is used.
+
+3. Wind rotation and interpolation
+
+   `VectorTrans_R2C` converts storm-relative Cartesian winds to cylindrical
+   radial/tangential winds. Dynamic, thermodynamic, moisture, radiation, flux,
+   and heating fields are interpolated to the storm-centered grid. The output in
+   `Result/MVCT` is the common input for radial slices and selected-level maps.
+
+4. Radius-height slice calculation
+
+   `TC_Rfield_slice` forms radial rings with width `dR`. For each model level
+   and radius bin, it averages fields over valid grid points in that annulus.
+   `H_DIABATIC` is also split into positive and negative components:
+
+   - `DIABATIC_P`: positive heating only.
+   - `DIABATIC_N`: negative heating only.
+
+5. Selected-level interpolation
+
+   `TC_Rfield_vlevel` interpolates each vertical column to `level_slect`.
+   `level_type = 0` uses height levels and `level_type = 1` uses pressure
+   levels. Columns with fewer than two valid vertical coordinate values are
+   skipped and remain NaN, which avoids unstable `interp1` calls.
+
+
+Fixes Made In This Check
+------------------------
+
+- Removed the missing TC_Rfield_quadrant call from Run.m.
+- Added cos(latitude) longitude-distance correction to the TC translation speed.
+- Fixed the vertical loop in TC_Rfield_slice.m to use `size(P,1)` explicitly.
+- Cleaned legacy mask allocation patterns in TC_Rfield_mvct.m.
+- Made TC_Rfield_vlevel.m initialize level-interpolated outputs with NaN before
+  interpolation.
+- Made TC_Rfield_vlevel.m skip columns with fewer than two valid vertical
+  coordinate values and remove NaN levels before calling interp1.
+
+
+Known Limitations
+-----------------
+
+- Time ranges, domain prefix, radius, grid spacing, and level selections are
+  configured in `TC_Rfield_config.m`.
+- Full validation requires real Pre/PHY/DATA files and the track file from
+  TC_track.
+- The fast `rough_dist = 1` path assumes the TC center is exactly located on the
+  WRF lon/lat grid. If not, the script falls back to geodesic distance
+  calculation.
+- griddata/interp2 interpolation can leave NaN values near domain edges or where
+  the requested storm-centered grid extends beyond available WRF data.
+- TC_Rfield_vlevel.m uses plain interp1 without extrapolation, so requested
+  levels outside a column's available vertical range remain NaN.
+
+
+Recommended Diagnostics
+-----------------------
+
+After running TC_Rfield, inspect:
+
+- TC_Rfield/Result/MVCT: storm-centered gridded fields.
+- TC_Rfield/Result/SLICE: radius-height mean structure.
+- TC_Rfield/Result/VLEVEL: selected-level horizontal fields.
+- NaN coverage near outer radius and at requested vertical levels.
+- Track consistency from TC_track/Result/Track_data.mat.

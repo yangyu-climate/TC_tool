@@ -1,0 +1,340 @@
+TC_MBG toolbox
+===============
+
+Purpose
+-------
+
+TC_MBG calculates the mean and eddy radial/tangential momentum budget of a
+tropical cyclone in a storm-following cylindrical coordinate system.
+
+The implementation is mainly aligned with:
+
+- Montgomery et al. (2020), QJRMS, DOI: 10.1002/qj.3837
+- Yu et al. (2022), QJRMS, DOI: 10.1002/qj.4379
+
+
+Directory
+---------
+
+TC_MBG contains:
+
+- Run.m
+- Run.sh
+- TC_MBG_mvct.m
+- TC_MBG_azimuthally.m
+- TC_MBG_calculate.m
+- doc/Montgomery et al. (2020).pdf
+- doc/Yu et al. (2022).pdf
+
+Run.m is the normal MATLAB entry point:
+
+1. TC_MBG_mvct
+2. TC_MBG_azimuthally
+3. TC_MBG_calculate
+
+
+Input Requirements
+------------------
+
+Before running TC_MBG, the following inputs must exist:
+
+- ../TC_track/Result/Track_data.mat
+- ../Pre/BGT/DATA
+
+Track_data.mat should contain:
+
+- TIME
+- LON
+- LAT
+- SLP
+- SWD
+- LON_W
+- LAT_W
+
+Pre/BGT/DATA should contain WRF-derived NetCDF files using the name pattern:
+
+- wrfout_d03*YYYY-MM-DD_HH:MM:SS*_time.nc
+- matching files for lon, lat, z, p, f, u, v, w, kh, kv, RUBLTEN, RVBLTEN,
+  avo, rho
+
+The WRF preprocessing step must be run before this toolbox. If either the track
+file or Pre/BGT/DATA is missing, TC_MBG cannot produce new results.
+
+
+Workflow
+--------
+
+1. TC_MBG_mvct.m
+
+   Converts WRF output into a TC-following cylindrical grid.
+
+   Main operations:
+
+   - Reads TC track from ../TC_track/Result/Track_data.mat.
+   - Reads WRF-derived fields from ../Pre/BGT/DATA.
+   - Removes TC translation speed from horizontal winds.
+   - Converts wind from Cartesian to cylindrical components.
+   - Interpolates variables to the R/PHI grid.
+   - Saves storm-centered data to TC_MBG/Result/Data.
+
+   Output variables include:
+
+   - R, PHI, dR, dPhi
+   - TIME, lon, lat, z, P
+   - f, u, v, w, kh, kv, Upbl, Vpbl, avo, rho
+   - lon_TC, lat_TC, slp_TC, swd_TC, u_TC, v_TC
+
+2. TC_MBG_azimuthally.m
+
+   Computes azimuthal means, perturbations, and diffusion stress terms.
+
+   Main operations:
+
+   - Reads TC_MBG/Result/Data.
+   - Converts pressure from hPa to Pa.
+   - Builds radius in meters.
+   - Masks r == 0 as NaN before 1/r calculations.
+   - Computes absolute-vorticity decomposition and stress components.
+   - Saves azimuthal mean and perturbation variables to
+     TC_MBG/Result/azimuthally.
+
+   Important output variables:
+
+   - um, vm, wm: azimuthal-mean radial, tangential, vertical wind
+   - up, vp, wp: eddy wind components
+   - Om, Op: mean and eddy relative vertical vorticity
+   - Rm, Rp: mean and eddy density
+   - Pm, Pp: mean and eddy pressure
+   - TrpM, TpzM, TrrM, TppM, TrzM: mean stress terms
+   - UpblM, VpblM: azimuthal-mean WRF PBL radial/tangential tendencies
+
+3. TC_MBG_calculate.m
+
+   Calculates the radial and tangential momentum-budget terms.
+
+   Main operations:
+
+   - Reads TC_MBG/Result/azimuthally.
+   - Uses Pa for radial pressure-gradient acceleration.
+   - Calculates Ut and Vt from neighboring azimuthal-mean files.
+   - Uses fourth-order centered tendency when two files exist on each side.
+   - Falls back to second-order centered, second-order one-sided, or first-order
+     one-sided tendency near boundaries.
+   - Evaluates all RHS terms at the current analysis time.
+   - Saves raw terms, summed RHS, and residual diagnostics to TC_MBG/Result/MBG.
+
+   The tendency method is saved as Tendency_scheme.
+
+
+Momentum-Budget Terms
+---------------------
+
+Tangential equation:
+
+Vt = Vmzeta + Vmv + Vezeta + Vev + Vpbl + Residual_V
+
+Saved terms:
+
+- Vt: direct tendency of azimuthal-mean tangential wind
+- Vmzeta: mean radial influx of absolute vertical vorticity
+- Vmv: mean vertical advection of mean tangential momentum
+- Vezeta: eddy radial vorticity flux
+- Vev: eddy vertical advection of eddy tangential momentum
+- Vd: total tangential kh/kv stress-tensor diffusion diagnostic
+- Vdr: radial part of Vd
+- Vdz: vertical part of Vd
+- Vpbl: direct WRF PBL tangential-wind tendency
+- Sum_V: Vmzeta + Vmv + Vezeta + Vev + Vpbl
+- Residual_V: Vt - Sum_V
+
+Radial equation:
+
+Ut = -Umr - Ueh + Umv + Uev + Umagf + Ueagf + Upbl + Residual_U
+
+Saved terms:
+
+- Ut: direct tendency of azimuthal-mean radial wind
+- Umr: mean radial advection of radial momentum
+- Ueh: horizontal eddy radial-momentum advection
+- Umv: minus mean vertical advection of mean radial momentum
+- Uev: minus eddy vertical advection of eddy radial momentum
+- Umagf: mean agradient force
+- Ueagf: eddy agradient force
+- Ud: total radial kh/kv stress-tensor diffusion diagnostic
+- Udh: horizontal part of Ud
+- Udz: vertical part of Ud
+- Upbl: direct WRF PBL radial-wind tendency
+- Sum_U: -Umr - Ueh + Umv + Uev + Umagf + Ueagf + Upbl
+- Residual_U: Ut - Sum_U
+
+
+Important Algorithm Notes
+-------------------------
+
+The current checked version includes these accuracy-oriented changes:
+
+- Tendency calculation supports higher-order centered differencing when enough
+  neighboring files are available.
+- TC translation speed uses a longitude-distance cos(latitude) correction for
+  the zonal component and the standard 111.2 km per degree scaling for the
+  meridional component.
+- TC translation speed smoothing is configurable with `TC_smooth_hours` and
+  `TC_smooth_pass` in `TC_MBG_config.m`. The default is 1-hour, 1-pass smoothing to
+  reduce path wobble and artificial acceleration.
+- WRF PBL tendency outputs (`RUBLTEN`, `RVBLTEN`) are now read directly,
+  transformed to cylindrical coordinates, azimuthally averaged, saved as
+  `Upbl`/`Vpbl`, and included in `Sum_U`/`Sum_V`.
+- The kh/kv stress-tensor diffusion terms (`Ud`, `Vd`) are saved as separate
+  diagnostics only. They are not included in `Sum_U`/`Sum_V` when direct WRF
+  PBL tendencies are used, preventing double counting of PBL mixing.
+- Neighboring tendency files are interpolated to the current R/PHI grid when
+  grids differ.
+- `TC_MBG_azimuthally` converts BGT pressure from hPa to Pa before saving `Pm`
+  and `Pp`. `TC_MBG_calculate` also checks `Pm` and automatically converts old
+  hPa-format intermediate files before evaluating pressure-gradient acceleration.
+- r == 0 is set to NaN before terms with 1/r are evaluated, preventing the storm
+  center singularity from contaminating diffusion and agradient-force terms.
+- date2num rounds datenum values to the nearest whole second before creating
+  year/month/day/hour/minute/second fields. This avoids file-name mismatches from
+  floating-point second noise.
+
+
+Detailed Calculation Notes
+--------------------------
+
+1. TC translation speed
+
+   TC_MBG uses `LON_W` and `LAT_W` from `Track_data.mat` to estimate the storm
+   translation velocity. Interior times use a centered finite difference. The
+   first and last track times are set to zero because a centered difference is
+   not available there.
+
+   The zonal component uses the longitude-distance correction:
+
+   `TC_U = dLON/dt * 111.2 km/degree * cos(lat_mid)`
+
+   The meridional component uses:
+
+   `TC_V = dLAT/dt * 111.2 km/degree`
+
+   Both are converted to m/s. After differencing, the translation velocity is
+   smoothed using `TC_smooth_hours`. The window is calculated as:
+
+   `TC_smooth_window = max(1, 2*floor((TC_smooth_hours*60/Time_frq)/2)+1)`
+
+   With the default `TC_smooth_hours = 1`, 15-minute data use a 5-point window.
+   This reduces track wobble and artificial acceleration before the wind is made
+   storm-relative.
+
+2. Storm-relative cylindrical remapping
+
+   The model horizontal wind is converted to the moving TC frame:
+
+   - `u_cart = u_wrf - TC_U`
+   - `v_cart = v_wrf - TC_V`
+
+   `VectorTrans_R2C` rotates those Cartesian winds into radial and tangential
+   components. All required fields are then interpolated to the `(PHI,R)` grid
+   by `Car2Cly`.
+
+3. Azimuthal decomposition
+
+   `TC_MBG_azimuthally` computes azimuthal means and eddies:
+
+   - `um, vm, wm`: azimuthal-mean radial, tangential, and vertical winds.
+   - `up, vp, wp`: deviations from the azimuthal means.
+   - `Om, Op`: mean and eddy relative vorticity.
+   - `Rm, Pm`: mean density and pressure.
+
+   The radius `r = 0` column is set to NaN before any `1/r` terms are evaluated.
+
+4. Tendency calculation
+
+   `TC_MBG_calculate` calculates `Ut` and `Vt` from neighboring
+   azimuthal-mean files. It uses the highest available order:
+
+   - fourth-order centered when `t-2dt`, `t-dt`, `t+dt`, and `t+2dt` exist;
+   - second-order centered when `t-dt` and `t+dt` exist;
+   - second-order one-sided near boundaries when possible;
+   - first-order one-sided as the last fallback.
+
+   The selected method is saved as `Tendency_scheme`.
+
+5. Momentum-budget closure
+
+   Tangential momentum is closed as:
+
+   `Vt = Vmzeta + Vmv + Vezeta + Vev + Vpbl + Residual_V`
+
+   Radial momentum is closed as:
+
+   `Ut = -Umr - Ueh + Umv + Uev + Umagf + Ueagf + Upbl + Residual_U`
+
+   The pressure-gradient parts of `Umagf` and `Ueagf` use pressure in Pa and
+   density in kg/m3, so their units are m/s2. The saved
+   `Pressure_gradient_unit` records whether the current run used native Pa
+   intermediate fields or converted old hPa fields during calculation.
+
+   `Sum_V`, `Sum_U`, `Residual_V`, and `Residual_U` are saved so the user can
+   directly evaluate budget closure.
+
+
+How To Run
+----------
+
+From MATLAB:
+
+cd TC_MBG
+Run
+
+From Linux shell:
+
+cd TC_MBG
+./Run.sh
+
+Run.sh uses a POSIX shell wrapper around MATLAB. On Windows, start MATLAB and
+run Run.m directly.
+
+
+Outputs
+-------
+
+TC_MBG writes three result directories:
+
+- TC_MBG/Result/Data
+- TC_MBG/Result/azimuthally
+- TC_MBG/Result/MBG
+
+The final diagnostic files are saved in TC_MBG/Result/MBG as:
+
+- MBG_YYYY-MM-DD_HH:MM:SS.mat
+
+These files contain the raw momentum-budget terms and the residual diagnostics.
+
+
+
+Known Limitations
+-----------------
+
+- Time range, domain name, grid size, and timestep are configured in
+  `TC_MBG_config.m`. Use `Time_beg`, `Time_end`, and `Time_frq` for the
+  analysis period and output interval. Use `Tendency_frq` for the neighboring
+  file interval in finite-difference tendency diagnostics.
+- The first and last available times may use lower-order one-sided tendency, so
+  budget closure is usually less accurate at time boundaries.
+- The r = 0 column is intentionally masked for singular 1/r terms. Interpret the
+  exact storm-center radius with care.
+
+
+Recommended Diagnostics
+-----------------------
+
+After running the toolbox, inspect:
+
+- Tendency_scheme: confirms which finite-difference method was used.
+- Pressure_gradient_unit: confirms whether pressure-gradient terms used Pa
+  directly or converted old hPa intermediate fields.
+- Residual_V and Residual_U: direct budget closure errors.
+- Sum_V and Sum_U: RHS budget sums to compare against Vt and Ut.
+- Boundary times: often less accurate because centered differencing may not be
+  available.

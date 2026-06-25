@@ -1,0 +1,17 @@
+# Keep script/source files portable across Windows and Linux.
+*.m text eol=lf
+*.ncl text eol=lf
+*.sh text eol=lf
+*.md text eol=lf
+README* text eol=lf
+
+# Binary/data formats used by the toolboxes.
+*.mat binary
+*.fig binary
+*.nc binary
+*.nc4 binary
+*.hdf binary
+*.pdf binary
+*.docx binary
+*.xlsx binary
+*.grib2 binary

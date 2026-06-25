@@ -1,0 +1,219 @@
+# TC_PVBG potential vorticity budget toolbox
+
+`TC_PVBG` diagnoses generalized Ertel potential-vorticity budgets in
+storm-following cylindrical coordinates. It supports both dry potential
+temperature `theta` and equivalent potential temperature `thetaE`:
+
+```text
+PV_b = eta_a dot grad(b) / rho
+```
+
+where `b` is either `theta` or `thetaE`, and `eta_a` is the absolute-vorticity
+vector. The default budget variable is `thetaE` because moist TC PV diagnostics
+usually need the complete moist scalar form.
+
+## Workflow
+
+Run from the `TC_PVBG` directory:
+
+```matlab
+Run
+```
+
+All case parameters are centralized in:
+
+```matlab
+TC_PVBG_config.m
+```
+
+Edit this file to change the analysis period, cylindrical grid, fixed-height
+levels, smoothing, thermodynamic option, friction option, or file naming.
+The detailed PV budget equations are documented in the Word file
+`TC_PVBG/doc/PV_Budget_Equations.docx`.
+
+The run sequence is two steps:
+
+1. `TC_PVBG_mvct`
+   - Reads WRF variables from `../Pre/BGT/DATA`.
+   - Reads storm center/intensity from `../TC_track/Result/Track_data.mat`.
+   - Removes TC translation speed from horizontal wind. The zonal translation
+     speed includes the `cos(latitude)` longitude-distance correction.
+   - Interpolates variables to fixed height levels when `IF_Zfix = 1`
+     before horizontal PV gradients are computed.
+   - Interpolates fields to a storm-centered cylindrical grid.
+   - Computes `pv_theta`, `pv_thetaE`, and `pv_diff = pv_thetaE - pv_theta`.
+   - Saves `Result/Data/PVBG_*.mat`.
+
+2. `TC_PVBG_calculate`
+   - Reads `Result/Data/PVBG_*.mat` directly.
+   - Computes local Ertel PV tendency, advection, solenoidal/composition term,
+     thermodynamic nonconservation term, PBL frictional PV term, and residual.
+   - Azimuthally averages the final budget terms internally.
+   - Saves `Result/PVBG/PVBG_*.mat`.
+
+## Required Inputs
+
+`TC_PVBG_mvct` expects these preprocessed WRF files in `Pre/BGT/DATA`:
+
+- Grid and state: `lon`, `lat`, `z`, `p`, `rho`
+- Dynamics: `f`, `u`, `v`, `w`, `avo`, `kh`, `kv`, `RUBLTEN`, `RVBLTEN`
+- Thermodynamics: `theta`, `thetaE`, `H_DIABATIC`
+- Optional theta tendencies: `RTHRATEN`, `RTHBLTEN`, `RTHCUTEN`
+- Optional comparison PV: `pvo`
+
+If `pvo` exists it is retained as `pvo_wrf` for comparison. The budget itself is
+based on internally diagnosed Ertel PV:
+
+```text
+PV_theta  = eta_a dot grad(theta)  / rho
+PV_thetaE = eta_a dot grad(thetaE) / rho
+```
+
+`pvo_wrf` is stored by the BGT preprocessor in `PVU`. The internally diagnosed
+`pv_theta` and `pv_thetaE` are stored in SI units
+`K m^2 kg^-1 s^-1`; `pv_theta_pvu`, `pv_thetaE_pvu`, and `pv_diff_pvu` are also
+saved for direct PVU-scale comparison.
+
+The track file must contain `TIME`, `LON`, `LAT`, `SLP`, `SWD`, `LON_W`, and
+`LAT_W`.
+
+## Complete Budget
+
+For any scalar `b`, the height-coordinate form saved by this toolbox is:
+
+```text
+PV_tendency =
+    PV_radial_adv + PV_azimuth_adv + PV_vertical_adv
+  + PV_solenoidal + PV_therm + PV_friction + PV_residual
+```
+
+Advection terms use storm-relative cylindrical velocity:
+
+```text
+PV_radial_adv   = -u * dPV/dr
+PV_azimuth_adv  = -v/r * dPV/dphi
+PV_vertical_adv = -w * dPV/dz
+```
+
+The solenoidal/composition source is retained explicitly:
+
+```text
+PV_solenoidal = [(grad rho x grad p) dot grad b] / rho^3
+```
+
+This term is expected to vanish for ideal dry air when `b = theta`, but it
+generally should not be removed for `b = thetaE` in moist TC flow.
+`Pre/BGT` stores `P` in hPa, so `TC_PVBG_calculate` converts it to `P_pa` before
+evaluating `grad p` in this term.
+
+The thermodynamic nonconservation term is:
+
+```text
+PV_therm = eta_a dot grad(Db/Dt) / rho
+```
+
+For `Use_thetaE = 1`, `Db/Dt` is diagnosed from the material tendency of
+`thetaE` on the moving cylindrical grid. For `Use_thetaE = 0`, `Db/Dt` is set
+to the total theta tendency `H_DIABATIC` read from WRF heating outputs.
+
+The frictional/nonconservative momentum term is:
+
+```text
+PV_friction = curl(F) dot grad(b) / rho
+```
+
+where `F` is the horizontal PBL momentum tendency from WRF. `TC_PVBG_mvct`
+reads `RUBLTEN` and `RVBLTEN` from `Pre/BGT/DATA`, whose preprocessed units are
+`m s^-2`, remaps them to the moving cylindrical grid, rotates them into
+`Upbl` and `Vpbl`, and `TC_PVBG_calculate` evaluates `curl(F)` in cylindrical
+coordinates. Since no vertical momentum forcing is provided, the calculation
+uses `F_z = 0`.
+
+`TC_PVBG_calculate` also diagnoses a stress-tensor estimate from `kh/kv` as
+`PV_friction_khkv`. This term is saved for comparison and sensitivity tests,
+but is not added to the default `PV_friction`, because `RUBLTEN/RVBLTEN` already
+represent the WRF PBL momentum tendency and adding both terms can double count
+PBL mixing. Set `Use_khkv_friction = 1` in `TC_PVBG_config.m` only when the
+direct WRF PBL tendency should be combined with the stress-tensor diagnostic
+for a specific experiment.
+
+After these explicit terms, `PV_residual` mainly contains momentum forcing not
+represented by `RUBLTEN/RVBLTEN`, any true model tendency not exported to
+`Pre/BGT/DATA`, numerical diffusion, interpolation errors, time/space
+discretization error, and mismatch in the diagnosed material tendencies.
+
+## Main Outputs
+
+`Result/PVBG/PVBG_*.mat` includes:
+
+- `pv_name`: selected budget scalar, `theta` or `thetaE`.
+- `pv_theta`, `pv_thetaE`, `pv_diff`: azimuthal-mean Ertel PV diagnostics in
+  SI units.
+- `pv_theta_pvu`, `pv_thetaE_pvu`, `pv_diff_pvu`: same fields converted to PVU.
+- `pvo_wrf`: WRF preprocessed PV for comparison.
+- `b`: selected scalar used in the budget.
+- `b_dot`: scalar material tendency used in `PV_therm`.
+- `PV_tendency`: finite-difference local PV tendency.
+- `PV_radial_adv`, `PV_azimuth_adv`, `PV_vertical_adv`: resolved advection.
+- `PV_solenoidal`: `[(grad rho x grad p) dot grad b] / rho^3`.
+- `PV_therm`: `eta_a dot grad(Db/Dt) / rho`.
+- `PV_friction_pbl`: `curl(F_PBL) dot grad(b) / rho`, using WRF
+  `RUBLTEN/RVBLTEN` remapped as cylindrical `Upbl/Vpbl`.
+- `PV_friction_khkv`: diagnostic stress-tensor estimate from `kh/kv`; saved
+  separately to avoid accidental double counting.
+- `PV_friction`: default equals `PV_friction_pbl`. If `Use_khkv_friction = 1`,
+  it equals `PV_friction_pbl + PV_friction_khkv`.
+- `PV_sum`: sum of resolved RHS terms.
+- `PV_residual`: `PV_tendency - PV_sum`.
+- All budget terms are kept as azimuthal-mean `z-r` structures for direct
+  inspection of the two-dimensional PV budget.
+
+## Output Dimensions
+
+- `R`: `[1 x nR]`, radius in km.
+- `PHI`: `[1 x nPhi]`, azimuth angle in radians.
+- `z`, `r`, `P`, `P_pa`, `rho`, `pv_theta`, `pv_thetaE`, `pv_diff`,
+  `pv_theta_pvu`, `pv_thetaE_pvu`, `pv_diff_pvu`, `pvo_wrf`, `theta`,
+  `thetaE`, `H_DIABATIC`, `b`, `b_dot`, `u_mean`, `v_mean`, `w_mean`,
+  `Upbl_mean`, `Vpbl_mean`, and all local budget terms in `Result/PVBG`:
+  `[nZ x nR]`.
+- Scalars such as `dR`, `dPhi`, `dr`, `dt`, `Use_thetaE`,
+  `Use_khkv_friction`, and `TIME`: `[1 x 1]`.
+
+`TC_PVBG` does not collapse the budget into a radial integral by default. The
+intended diagnostic view is the full azimuthal-mean two-dimensional structure
+in height-radius coordinates.
+
+## Method Notes
+
+- `Use_thetaE = 1` by default in `TC_PVBG_config.m`.
+- `IF_Zfix = 1` by default in `TC_PVBG_config.m`. This is important for PV:
+  horizontal gradients in `grad(b)` and `grad(p)` should be evaluated on
+  approximately constant-height surfaces, not on sloping model-level surfaces.
+- TC translation speed is calculated from `LON_W` and `LAT_W` using centered
+  finite differences.
+- The zonal component is
+  `TC_U = dLON/dt * 111.2 km/degree * cos(lat_mid)`, converted to m/s.
+- The meridional component is
+  `TC_V = dLAT/dt * 111.2 km/degree`, converted to m/s.
+- Translation speed smoothing is controlled by `TC_smooth_hours` and
+  `TC_smooth_pass` in `TC_PVBG_config.m`. The default is 1-hour, 1-pass
+  smoothing.
+- PV tendency uses fourth-order centered differencing when possible, otherwise
+  second-order centered, one-sided, or first-order fallback near boundaries.
+- The `r = 0` column is masked for terms containing `1/r`.
+
+## Typical Edits
+
+- Change parameters in `TC_PVBG_config.m`.
+- Use `Time_beg`, `Time_end`, `Time_frq`, and `Tendency_frq` for time control.
+- Use `Radius`, `dR`, and `dPhi` for the cylindrical grid.
+- Use `IF_Zfix`, `z_limit`, `z_level`, `z_low`, and `z_lowL` for the
+  fixed-height grid.
+- If source heating files are already in `K s-1`, set `Kday_to_Ks = 1`.
+- Use `Use_thetaE` to switch the budget scalar between `theta` and `thetaE`.
+- `PV_friction` currently uses WRF PBL momentum tendencies
+  `RUBLTEN/RVBLTEN`. `PV_friction_khkv` is saved as a separate stress-tensor
+  diagnostic. To diagnose other nonconservative momentum forcings, add those
+  gridded forcing terms to `Pre/BGT/DATA`, remap them in `TC_PVBG_mvct`, and
+  include them in `curl(F) dot grad(b) / rho`.

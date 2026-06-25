@@ -1,0 +1,216 @@
+TC_track toolbox
+================
+
+Purpose
+-------
+
+TC_track detects and tracks a tropical cyclone center from WRF-derived 2 km
+pressure and 10 m wind fields. Sea level pressure is retained as the intensity
+metric. Its final output, `Track_data.mat`, is the track input used by downstream
+modules such as TC_MBG, TC_Rfield, and TC_Profile.
+
+
+Directory
+---------
+
+TC_track contains:
+
+- Run.m
+- Run.sh
+- TC_Detect.m
+- TC_Track.m
+
+Run.m is the normal MATLAB entry point:
+
+1. TC_Detect
+2. TC_Track
+
+
+Input Requirements
+------------------
+
+Before running TC_track, the following input directory must exist:
+
+- ../Pre/SLP/DATA
+
+The expected files use the selected WRF domain prefix, for example:
+
+- wrfout_d03*_time.nc
+- wrfout_d03*_lon.nc
+- wrfout_d03*_lat.nc
+- wrfout_d03*_slp.nc
+- wrfout_d03*_U10.nc
+- wrfout_d03*_V10.nc
+- wrfout_d03*_P2km.nc
+
+The domain prefix is controlled by `cfg.Head_nam` in `TC_track_config.m`.
+
+
+Workflow
+--------
+
+1. TC_Detect.m
+
+   Detects candidate TC centers for each WRF output time.
+
+   Main operations:
+
+   - Reads lon, lat, SLP, U10, V10, and P2km from ../Pre/SLP/DATA.
+   - Calculates 10 m wind speed from U10 and V10.
+   - Optionally smooths SLP and wind speed.
+   - Uses TC_center_CIM on P2km to find candidate TC centers and associated
+     local maximum wind.
+   - Uses the minimum SLP identified by the SLP-center detection as the
+     intensity variable `tc_p`.
+   - Saves one detection file per time under TC_track/Data.
+   - Saves quick-look figures under TC_track/Fig.
+
+   Main saved variables:
+
+   - T
+   - tc_lon, tc_lat, tc_p, tc_w
+   - tw_lon, tw_lat
+   - lon, lat, slp, swd, P2km
+   - p2km_p
+   - slp_lon, slp_lat, slp_p, slp_w, slp_tw_lon, slp_tw_lat
+
+2. TC_Track.m
+
+   Connects candidate centers into a continuous track.
+
+   Main operations:
+
+   - Reads all matching detection files from TC_track/Data.
+   - Uses `Ini_loc` as the first-position guess.
+   - For later times, selects the candidate nearest to the previous accepted
+     track position.
+   - If a time has no valid candidate after the first valid point, it repeats
+     the previous track point.
+   - Saves the final track to TC_track/Result/Track_data.mat.
+
+
+Output
+------
+
+The final track file is:
+
+- TC_track/Result/Track_data.mat
+
+It contains:
+
+- TIME
+- LON
+- LAT
+- SLP
+- SWD
+- LON_W
+- LAT_W
+
+Downstream modules use these fields directly.
+
+
+Important Parameters
+--------------------
+
+Edit `TC_track_config.m` before applying the toolbox to another case.
+
+Detection parameters:
+
+- cfg.Head_nam: WRF domain prefix, for example `wrfout_d03`
+- resolution: model grid resolution in km
+- dR: smoothing resolution in km
+- TCR: 2 km pressure center search radius in km
+- TWR: maximum-wind search radius in km
+
+Tracking parameters:
+
+- Time_beg
+- Time_end
+- Ini_loc
+
+
+Current Check Result
+--------------------
+
+Checked with MATLAB R2021b on 2026-06-17.
+
+Result:
+
+- Run.m calls only existing TC_track scripts.
+- MATLAB syntax/checkcode parse completed for TC_Detect.m, TC_Track.m, and the
+  key center-detection helper functions.
+- The P2km-center plus identified minimum-SLP intensity logic passed a synthetic
+  test.
+- Internal dependencies were found: TC_center_CIM, TC_center_centroid,
+  TC_centroid_lonlat, running_mean_2D, mean_2D, and startup path tools.
+- The current workspace does not contain ../Pre/SLP/DATA, so a full numerical
+  detection/tracking run could not be performed in this checkout.
+
+
+Code Reasonableness Check
+-------------------------
+
+The current TC_track logic is reasonable for the intended Muifa-style WRF
+workflow:
+
+- TC_Detect.m uses P2km to identify the TC center, which avoids relying on SLP
+  when the near-surface pressure field is less representative of the vortex
+  center.
+- TC_Detect.m keeps SLP as the intensity metric by saving the identified minimum
+  SLP as `tc_p`.
+- TC_center_CIM.m searches local pressure minima within the configured radius
+  and then refines each candidate by a pressure-deficit centroid.
+- TC_Track.m connects candidates through time by nearest position, starting from
+  `Ini_loc`.
+- Track_data.mat keeps the expected downstream variables: TIME, LON, LAT, SLP,
+  SWD, LON_W, and LAT_W.
+
+Important assumptions:
+
+- `resolution`, `TCR`, and `TWR` must match the WRF domain. If they are too large
+  for the domain, edge candidates will be skipped by design.
+- Detection files should keep sortable date strings in their names, because
+  TC_Track.m processes the directory listing by date pattern.
+- The pressure-deficit centroid iteration normally converges for smooth TC
+  fields, but very noisy or multi-center fields should be checked using the
+  quick-look figures.
+- Full scientific validation still requires comparing Track_data.mat against
+  observed or manually inspected storm positions.
+
+
+Fixes Made In This Check
+------------------------
+
+- TC_Detect.m uses the P2km-based center as the main center used by TC_Track.m.
+- The identified minimum SLP is saved as `tc_p`, so downstream modules still
+  read SLP intensity from the existing variable name.
+- The SLP-based center is still calculated, but it is saved separately as
+  slp_* diagnostic variables and no longer overwrites tc_lon, tc_lat, tc_w,
+  tw_lon, or tw_lat.
+- TC_centroid_lonlat.m now uses a function name matching its file name.
+
+
+Known Limitations
+-----------------
+
+- Time range, initial location, WRF domain name, grid resolution, and search
+  radii are configured in `TC_track_config.m`.
+- TC_Track.m selects candidates by nearest longitude/latitude distance, not by
+  great-circle distance.
+- If a missing center occurs after tracking has started, TC_Track.m repeats the
+  previous point. This keeps downstream modules running but should be checked in
+  final diagnostics.
+- Run.sh uses rm, nohup, and matlab, so it is intended for Linux or a compatible
+  shell. On Windows, run Run.m from MATLAB.
+- Full verification requires real Pre/SLP/DATA files.
+
+
+Recommended Diagnostics
+-----------------------
+
+After running TC_track, inspect:
+
+- TC_track/Fig: quick-look center and wind plots.
+- TC_track/Data: per-time candidate detection files.
+- TC_track/Result/Track_data.mat: final TIME, LON, LAT, SLP, SWD, LON_W, LAT_W.
+- Repeated consecutive points: these usually indicate missing detections.
