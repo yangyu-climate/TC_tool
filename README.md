@@ -197,5 +197,5 @@ licenses, and citation requirements.
 
 For questions, bug reports, or collaboration requests, contact:
 
-- Email: `clarkyuchina@live.com`
+- Email: `yang.yu@whoi.edu`
 - GitHub: `https://github.com/yangatwhoi/TC_tool`
