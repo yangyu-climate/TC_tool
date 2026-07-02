@@ -5,14 +5,6 @@ from WRF output. It preprocesses WRF fields, detects and tracks the storm
 center, remaps WRF variables into storm-following coordinates, and diagnoses
 momentum, kinetic-energy, and potential-vorticity budgets.
 
-## Project Status
-
-- Repository: `https://github.com/yangyu-climate/TC_tool`
-- Default branch: `main`
-- Last README update: 2026-07-02
-- Current release state: research toolbox; full numerical validation requires
-  case-specific WRF-derived input data.
-
 ## Copyright
 
 Copyright (c) 2026 Yang Yu. All rights reserved unless otherwise stated.
