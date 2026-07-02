@@ -13,10 +13,6 @@ This repository also includes third-party MATLAB toolboxes and supporting data
 under `Tool_box`. Those components keep their original copyright notices,
 licenses, and citation requirements.
 
-## Contributor
-
-- `yangyu-climate`
-
 ## Contact
 
 For questions, bug reports, or collaboration requests, contact:
