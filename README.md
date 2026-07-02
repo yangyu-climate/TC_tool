@@ -18,7 +18,7 @@ licenses, and citation requirements.
 For questions, bug reports, or collaboration requests, contact:
 
 - Email: `yang.yu@whoi.edu`
-- GitHub: `https://github.com/yangatwhoi/TC_tool`
+- GitHub: `https://github.com/yangyu-climate/TC_tool`
 
 ## Repository Layout
 
