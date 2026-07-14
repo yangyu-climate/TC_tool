@@ -37,7 +37,7 @@ TC_tool/
 
 ## Requirements
 
-- MATLAB, tested with MATLAB R2021b.
+- MATLAB, tested with MATLAB R2021b and MATLAB R2025b.
 - NCL with the WRF NCL scripts available through `NCARG_ROOT`.
 - WRF output files using the configured domain prefix, for example
   `wrfout_d03`.
@@ -187,10 +187,25 @@ Most downstream modules require:
 
 ## Current Verification Notes
 
-Static MATLAB checks were last run with MATLAB R2021b on 2026-06-25:
+Static MATLAB checks were last run with MATLAB R2025b Update 5 on 2026-07-14:
 
-- First-party workflow files: 24 MATLAB files, 0 severe `checkcode` messages.
-- `Tool_box`: 732 MATLAB files, 0 severe `checkcode` messages.
+- First-party workflow files: 24 MATLAB files, 456 `checkcode` messages.
+- `Tool_box`: 733 MATLAB files, 6684 `checkcode` messages.
+- No syntax-level blocking errors were found in the MATLAB workflow files.
+- The remaining messages are mainly legacy MATLAB style, deprecated helper
+  functions such as `nanmean`, `nansum`, and `datenum`, `griddata` performance
+  suggestions, and loop preallocation warnings.
+
+NetCDF reading now uses MATLAB's built-in NetCDF interface in `ncload_0D`,
+`ncload_2D`, and `ncload_3D` instead of the legacy `mexcdf/ncmex` interface.
+The replacement preserves the legacy toolbox dimension order expected by the
+analysis code:
+
+- 2D NetCDF data are returned as `[y x]`.
+- 3D NetCDF data are returned as `[z y x]`.
+
+This NetCDF compatibility layer was regression-tested with MATLAB R2021b and
+MATLAB R2025b using non-square 2D and 3D test files.
 
 Full numerical validation requires real WRF-derived input data and a generated
 `TC_track/Result/Track_data.mat` file.
