@@ -5,6 +5,9 @@ function var = ncload_builtin(file_name,var_name)
 
     varid = netcdf.inqVarID(ncid,var_name);
     var = netcdf.getVar(ncid,varid);
+    if ndims(var) > 1
+        var = permute(var,ndims(var):-1:1);
+    end
 
     missV = read_attr(ncid,varid,'missing_value');
     fillV = read_attr(ncid,varid,'_FillValue');
