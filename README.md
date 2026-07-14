@@ -192,9 +192,6 @@ Static MATLAB checks were last run with MATLAB R2025b Update 5 on 2026-07-14:
 - First-party workflow files: 24 MATLAB files, 456 `checkcode` messages.
 - `Tool_box`: 733 MATLAB files, 6684 `checkcode` messages.
 - No syntax-level blocking errors were found in the MATLAB workflow files.
-- The remaining messages are mainly legacy MATLAB style, deprecated helper
-  functions such as `nanmean`, `nansum`, and `datenum`, `griddata` performance
-  suggestions, and loop preallocation warnings.
 
 NetCDF reading now uses MATLAB's built-in NetCDF interface in `ncload_0D`,
 `ncload_2D`, and `ncload_3D` instead of the legacy `mexcdf/ncmex` interface.
