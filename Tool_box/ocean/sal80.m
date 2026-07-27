@@ -1,10 +1,10 @@
-function s = sal80(r,t,p)
+function s = sal80(r,t,p)
 
 % SAL80   Converts Conductivity to Salinity
 %
 % S = SAL80(C,T,P);
 %
-%-----------------------------------------------------------------------------
+%-----------------------------------------------------------------------------
 %     Calculates Salinity from Conductivity, Temperature and Pressure
 %
 %     Input parameters:
