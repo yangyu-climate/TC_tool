@@ -7,7 +7,13 @@ Purpose
 TC_track detects and tracks a tropical cyclone center from WRF-derived 2 km
 pressure and 10 m wind fields. Sea level pressure is retained as the intensity
 metric. Its final output, `Track_data.mat`, is the track input used by downstream
-modules such as TC_MBG, TC_Rfield, and TC_Profile.
+modules such as TC_MBG and TC_Rfield.
+
+The track position and intensity intentionally have different definitions:
+`LON/LAT` are selected from the 2 km pressure-centre candidates, whereas `SLP`
+is the identified minimum sea-level pressure for that time. Therefore, `SLP`
+is a storm-intensity metric and is not necessarily the sea-level pressure at
+the stored `LON/LAT` position.
 
 
 Directory
@@ -108,6 +114,9 @@ It contains:
 
 Downstream modules use these fields directly.
 
+`LON` and `LAT` define the diagnostic centre. `SLP` is the time-matched
+minimum-SLP intensity metric, not a collocated pressure sample at that centre.
+
 
 Important Parameters
 --------------------
@@ -171,9 +180,10 @@ Important assumptions:
   for the domain, edge candidates will be skipped by design.
 - Detection files should keep sortable date strings in their names, because
   TC_Track.m processes the directory listing by date pattern.
-- The pressure-deficit centroid iteration normally converges for smooth TC
-  fields, but very noisy or multi-center fields should be checked using the
-  quick-look figures.
+- The pressure-deficit centroid iteration is capped at 100 iterations and
+  detects repeated centre positions. If it cannot converge, it retains the last
+  valid centre and issues a warning; very noisy or multi-centre fields should
+  still be checked using the quick-look figures.
 - Full scientific validation still requires comparing Track_data.mat against
   observed or manually inspected storm positions.
 

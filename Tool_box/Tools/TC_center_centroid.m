@@ -2,6 +2,7 @@ function [It,Jt]=TC_center_centroid(lon,lat,slp,I_Ini,J_Ini,resolution)
 
 R     = 111.2;
 R_lim = 100;
+max_iter = 100;
 
 Ig   = I_Ini;
 Jg   = J_Ini;
@@ -27,7 +28,26 @@ P = P-SLP;
 It = round(mean_2D(P.*I_M)/mean_2D(P.*mask));
 Jt = round(mean_2D(P.*J_M)/mean_2D(P.*mask));
 
-while (It~=Ig)||(Jt~=Jg)
+visited = false(size(slp));
+converged = false;
+for iter = 1:max_iter
+    if ~isfinite(It) || ~isfinite(Jt) || It<1 || It>size(slp,1) || Jt<1 || Jt>size(slp,2)
+        warning('TC_tool:CentroidInvalid','TC pressure-deficit centroid became invalid; retaining the last valid centre.')
+        It = Ig;
+        Jt = Jg;
+        break
+    end
+    if It==Ig && Jt==Jg
+        converged = true;
+        break
+    end
+    if visited(It,Jt)
+        warning('TC_tool:CentroidCycle','TC pressure-deficit centroid entered a cycle; retaining the last valid centre.')
+        It = Ig;
+        Jt = Jg;
+        break
+    end
+    visited(Ig,Jg) = true;
     disp(['Ig:',num2str(Ig),' Jg:',num2str(Jg),', Ic:',num2str(It),' Jc:',num2str(Jt)])
 
     Ig = It;
@@ -46,6 +66,12 @@ while (It~=Ig)||(Jt~=Jg)
 
     It = round(mean_2D(P.*I_M)/mean_2D(P.*mask));
     Jt = round(mean_2D(P.*J_M)/mean_2D(P.*mask));
+end
+
+if ~converged && iter==max_iter
+    warning('TC_tool:CentroidMaxIter','TC pressure-deficit centroid did not converge within %d iterations; retaining the last valid centre.',max_iter)
+    It = Ig;
+    Jt = Jg;
 end
 
 disp(['If:',num2str(It),' Jf:',num2str(Jt)])

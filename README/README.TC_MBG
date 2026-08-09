@@ -48,8 +48,8 @@ Track_data.mat should contain:
 - LAT
 - SLP
 - SWD
-- LON_W
-- LAT_W
+- CENTER_VALID
+- CENTER_HELD
 
 Pre/BGT/DATA should contain WRF-derived NetCDF files using the name pattern:
 
@@ -175,12 +175,9 @@ The current checked version includes these accuracy-oriented changes:
 
 - Tendency calculation supports higher-order centered differencing when enough
   neighboring files are available.
-- TC translation speed uses a longitude-distance cos(latitude) correction for
-  the zonal component and the standard 111.2 km per degree scaling for the
-  meridional component.
-- TC translation speed smoothing is configurable with `TC_smooth_hours` and
-  `TC_smooth_pass` in `TC_MBG_config.m`. The default is 1-hour, 1-pass smoothing to
-  reduce path wobble and artificial acceleration.
+- TC translation speed is the geodesic finite-difference velocity of the same
+  valid `LON/LAT` track used as the cylindrical origin. No independent wind
+  track or temporal smoothing is applied.
 - WRF PBL tendency outputs (`RUBLTEN`, `RVBLTEN`) are now read directly,
   transformed to cylindrical coordinates, azimuthally averaged, saved as
   `Upbl`/`Vpbl`, and included in `Sum_U`/`Sum_V`.
@@ -204,27 +201,12 @@ Detailed Calculation Notes
 
 1. TC translation speed
 
-   TC_MBG uses `LON_W` and `LAT_W` from `Track_data.mat` to estimate the storm
-   translation velocity. Interior times use a centered finite difference. The
-   first and last track times are set to zero because a centered difference is
-   not available there.
-
-   The zonal component uses the longitude-distance correction:
-
-   `TC_U = dLON/dt * 111.2 km/degree * cos(lat_mid)`
-
-   The meridional component uses:
-
-   `TC_V = dLAT/dt * 111.2 km/degree`
-
-   Both are converted to m/s. After differencing, the translation velocity is
-   smoothed using `TC_smooth_hours`. The window is calculated as:
-
-   `TC_smooth_window = max(1, 2*floor((TC_smooth_hours*60/Time_frq)/2)+1)`
-
-   With the default `TC_smooth_hours = 1`, 15-minute data use a 5-point window.
-   This reduces track wobble and artificial acceleration before the wind is made
-   storm-relative.
+   TC_MBG uses `LON/LAT` from `Track_data.mat`, the same centre definition used
+   for cylindrical remapping. `tc_track_motion` calculates the eastward and
+   northward velocity from spherical great-circle displacement. Interior times
+   use a centred finite difference; valid endpoints use a one-sided difference.
+   Held or missing centres, and samples next to them, are excluded because their
+   translating velocity is undefined. No temporal smoothing is applied.
 
 2. Storm-relative cylindrical remapping
 

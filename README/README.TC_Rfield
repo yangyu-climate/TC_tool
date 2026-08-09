@@ -43,8 +43,8 @@ Track_data.mat should contain:
 - LAT
 - SLP
 - SWD
-- LON_W
-- LAT_W
+- CENTER_VALID
+- CENTER_HELD
 
 Pre/PHY/DATA should contain WRF-derived NetCDF files using the selected domain
 prefix, currently `wrfout_d03`.
@@ -62,7 +62,8 @@ Workflow
    - Reads the track from ../TC_track/Result/Track_data.mat.
    - Reads WRF dynamic, thermodynamic, moisture, radiation, surface flux, and
      diabatic-heating variables from ../Pre/PHY/DATA.
-   - Estimates TC translation speed from the smoothed track.
+   - Calculates TC translation speed from the valid track using geodesic finite
+     differences.
    - Removes TC translation speed from horizontal winds.
    - Converts wind from Cartesian to cylindrical storm-relative components.
    - Interpolates variables to a storm-centered x/y grid.
@@ -153,11 +154,9 @@ Result:
 - Run.m now calls only existing TC_Rfield scripts.
 - MATLAB syntax/checkcode parse completed for TC_Rfield_mvct.m,
   TC_Rfield_slice.m, and TC_Rfield_vlevel.m.
-- TC translation speed uses a cos(latitude) correction for longitude distance
-  before removing the storm motion from horizontal winds.
-- TC translation speed smoothing is configurable with `TC_smooth_hours` and
-  `TC_smooth_pass` in `TC_Rfield_config.m`. The default is 1-hour, 1-pass smoothing
-  to reduce path wobble and artificial acceleration.
+- TC translation speed is calculated from the valid `LON/LAT` track by geodesic
+  finite difference before removing storm motion from horizontal winds. No
+  independent wind track or temporal smoothing is used.
 - The reported checkcode messages are mostly old MATLAB style, preallocation,
   nanmean/nansum recommendations, and griddata performance suggestions.
 - The current workspace does not contain ../TC_track/Result/Track_data.mat or
@@ -170,23 +169,12 @@ Detailed Calculation Notes
 
 1. TC translation speed
 
-   TC_Rfield estimates the storm motion from `LON_W` and `LAT_W` in
-   `Track_data.mat`. Interior times use a centered finite difference. The zonal
-   speed uses a cos(latitude) correction:
-
-   `TC_U = dLON/dt * 111.2 km/degree * cos(lat_mid)`
-
-   The meridional speed is:
-
-   `TC_V = dLAT/dt * 111.2 km/degree`
-
-   Both components are converted to m/s. The resulting translation velocity is
-   smoothed using:
-
-   `TC_smooth_window = max(1, 2*floor((TC_smooth_hours*60/Time_frq)/2)+1)`
-
-   With the default `TC_smooth_hours = 1`, 15-minute data use 5 points and
-   60-minute data use 1 point.
+   TC_Rfield uses the valid `LON/LAT` positions in `Track_data.mat`, the same
+   centre definition used for remapping. `tc_track_motion` derives eastward and
+   northward translation velocity from great-circle displacement. Interior times
+   use a centred finite difference and valid endpoints use a one-sided
+   difference. Held centres and neighbouring samples are excluded, and no
+   temporal smoothing is applied.
 
 2. Moving-frame gridding
 
@@ -228,7 +216,8 @@ Fixes Made In This Check
 ------------------------
 
 - Removed the missing TC_Rfield_quadrant call from Run.m.
-- Added cos(latitude) longitude-distance correction to the TC translation speed.
+- Uses a geodesic finite-difference translation velocity from the valid
+  `LON/LAT` track.
 - Fixed the vertical loop in TC_Rfield_slice.m to use `size(P,1)` explicitly.
 - Cleaned legacy mask allocation patterns in TC_Rfield_mvct.m.
 - Made TC_Rfield_vlevel.m initialize level-interpolated outputs with NaN before

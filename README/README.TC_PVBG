@@ -74,8 +74,8 @@ PV_thetaE = eta_a dot grad(thetaE) / rho
 `K m^2 kg^-1 s^-1`; `pv_theta_pvu`, `pv_thetaE_pvu`, and `pv_diff_pvu` are also
 saved for direct PVU-scale comparison.
 
-The track file must contain `TIME`, `LON`, `LAT`, `SLP`, `SWD`, `LON_W`, and
-`LAT_W`.
+The track file must contain `TIME`, `LON`, `LAT`, `SLP`, `SWD`, `CENTER_VALID`,
+and `CENTER_HELD`.
 
 ## Complete Budget
 
@@ -190,15 +190,11 @@ in height-radius coordinates.
 - `IF_Zfix = 1` by default in `TC_PVBG_config.m`. This is important for PV:
   horizontal gradients in `grad(b)` and `grad(p)` should be evaluated on
   approximately constant-height surfaces, not on sloping model-level surfaces.
-- TC translation speed is calculated from `LON_W` and `LAT_W` using centered
-  finite differences.
-- The zonal component is
-  `TC_U = dLON/dt * 111.2 km/degree * cos(lat_mid)`, converted to m/s.
-- The meridional component is
-  `TC_V = dLAT/dt * 111.2 km/degree`, converted to m/s.
-- Translation speed smoothing is controlled by `TC_smooth_hours` and
-  `TC_smooth_pass` in `TC_PVBG_config.m`. The default is 1-hour, 1-pass
-  smoothing.
+- TC translation speed is calculated from the valid `LON/LAT` track using a
+  spherical great-circle finite difference. This is the same track used as the
+  cylindrical origin; no independent wind track or temporal smoothing is used.
+- Interior times use a centred finite difference and valid endpoints use a
+  one-sided difference. Held centres and neighbouring samples are excluded.
 - PV tendency uses fourth-order centered differencing when possible, otherwise
   second-order centered, one-sided, or first-order fallback near boundaries.
 - The `r = 0` column is masked for terms containing `1/r`.
