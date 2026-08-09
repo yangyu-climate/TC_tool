@@ -1,7 +1,6 @@
 clear
 clc
 
-warning off
 Run_dir = ['../'];
 addpath(Run_dir);
 start
@@ -13,10 +12,6 @@ Time_end   = cfg.Time_end;
 Time_frq   = cfg.Time_frq;
 Radius     = cfg.Radius;
 resolution = cfg.resolution;
-rough_dist = cfg.rough_dist;
-rough_reso = cfg.rough_reso;
-TC_smooth_hours  = cfg.TC_smooth_hours;
-TC_smooth_pass   = cfg.TC_smooth_pass;
 Track_file = cfg.Track_file;
 Data_dir   = cfg.Input_dir;
 Head_nam   = cfg.Head_nam;
@@ -37,27 +32,12 @@ TC_lon     = load_data(Track_file,'LON');
 TC_lat     = load_data(Track_file,'LAT');
 TC_slp     = load_data(Track_file,'SLP');
 TC_swd     = load_data(Track_file,'SWD');
-TW_lon     = load_data(Track_file,'LON_W');
-TW_lat     = load_data(Track_file,'LAT_W');
-for num=1:length(TC_time)
-    if num==1||num==length(TC_time)
-        TC_U(num) = 0;
-        TC_V(num) = 0;
-    else
-        lat_mid = 0.5*(TW_lat(num+1)+TW_lat(num-1));
-        TC_U(num) = (TW_lon(num+1)-TW_lon(num-1))...
-                   /(TC_time(num+1)-TC_time(num-1))...
-                   *111.2*cos(lat_mid*pi/180)*1000/24/60/60;
-        TC_V(num) = (TW_lat(num+1)-TW_lat(num-1))...
-                   /(TC_time(num+1)-TC_time(num-1))...
-                   *111.2*1000/24/60/60;
-    end
-end
-TC_smooth_window = max(1,2*floor((TC_smooth_hours*60/Time_frq)/2)+1);
-for smoothN = 1:TC_smooth_pass
-    TC_U = running_mean_1D(TC_U,TC_smooth_window);
-    TC_V = running_mean_1D(TC_V,TC_smooth_window);
-end
+track_quality = load(Track_file,'CENTER_VALID','CENTER_HELD');
+TC_center_valid = logical(track_quality.CENTER_VALID);
+assert(numel(TC_center_valid)==numel(TC_time),'TC_Rfield:TrackQuality','CENTER_VALID must match TIME')
+[TC_U,TC_V] = tc_track_motion(TC_time,TC_lat,TC_lon,TC_center_valid);
+TC_diagnostic_valid = TC_center_valid & isfinite(TC_U) & isfinite(TC_V);
+center_motion_method = 'track_geodesic_finite_difference';
 
 
 for T = T_beg:T_frq:T_end
@@ -70,7 +50,7 @@ for T = T_beg:T_frq:T_end
     file_name = [Head_nam,'*',T_name,'*_time.nc'];
     filename  = dir([Data_dir,'/',file_name]);
     if ~isempty(filename)
-        TC_loc = find(TC_time==TIME);
+        TC_loc = tc_match_track_time(TC_time,TIME,0.5*T_frq,TC_diagnostic_valid);
         if ~isempty(TC_loc)
         lon_TC = TC_lon(TC_loc);
         lat_TC = TC_lat(TC_loc);
@@ -140,82 +120,23 @@ for T = T_beg:T_frq:T_end
         end
 
         disp(['Calculating...'])
-        dist  = NaN*ones(size(lon));
         mask  = NaN*ones(size(lon));
-        index = find(lon==lon_TC&lat==lat_TC);
-        if ~isempty(index)
-        [x1,x2] = ind2sub(size(mask),index);
-        else
-        rough_dist = 0;
-        end
-        if rough_dist
-          disty   = ((1:size(dist,1)) - x1)*rough_reso;
-          distx   = ((1:size(dist,2)) - x2)*rough_reso;
-          [X,Y]   = meshgrid(distx,disty);
-          dist    = sqrt(X.^2+Y.^2);
-          clear distx disty x1 x2
-        else
-          for i = 1:size(mask,1)
-            for j = 1:size(mask,2)
-              dist(i,j) = distbear([lat(i,j) lat_TC],[lon(i,j) lon_TC],'wgs84')/1000;
-              X(i,j)    = distbear([lat_TC   lat_TC],[lon(i,j) lon_TC],'wgs84')/1000*sign(lon(i,j)-lon_TC);
-              Y(i,j)    = distbear([lat(i,j) lat_TC],[lon_TC   lon_TC],'wgs84')/1000*sign(lat(i,j)-lat_TC);
-            end
-          end
-        end
+        [dist,X,Y] = tc_great_circle_xy(lat,lon,lat_TC,lon_TC);
         mask(dist<=(Radius+dR)) = 1;
 
-        if rough_dist
-          lon  = interp2(X,Y,lon .*mask,x,y);
-          lat  = interp2(X,Y,lat .*mask,x,y);
-          f    = interp2(X,Y,f   .*mask,x,y);
-          pblh = interp2(X,Y,pblh.*mask,x,y);
-          GLW  = interp2(X,Y,GLW .*mask,x,y);
-          GSW  = interp2(X,Y,GSW .*mask,x,y);
-          LHF  = interp2(X,Y,LHF .*mask,x,y);
-          SHF  = interp2(X,Y,SHF .*mask,x,y);
-          SLP  = interp2(X,Y,SLP .*mask,x,y);
-          SST  = interp2(X,Y,SST .*mask,x,y);
-          U10  = interp2(X,Y,U10 .*mask,x,y);
-          V10  = interp2(X,Y,V10 .*mask,x,y);
-        else
-          lon  = griddata(X,Y,lon .*mask,x,y);
-          lat  = griddata(X,Y,lat .*mask,x,y);
-          f    = griddata(X,Y,f   .*mask,x,y);
-          pblh = griddata(X,Y,pblh.*mask,x,y);
-          GLW  = griddata(X,Y,GLW .*mask,x,y);
-          GSW  = griddata(X,Y,GSW .*mask,x,y);
-          LHF  = griddata(X,Y,LHF .*mask,x,y);
-          SHF  = griddata(X,Y,SHF .*mask,x,y);
-          SLP  = griddata(X,Y,SLP .*mask,x,y);
-          SST  = griddata(X,Y,SST .*mask,x,y);
-          U10  = griddata(X,Y,U10 .*mask,x,y);
-          V10  = griddata(X,Y,V10 .*mask,x,y);
-        end
+        lon  = griddata(X,Y,lon .*mask,x,y);
+        lat  = griddata(X,Y,lat .*mask,x,y);
+        f    = griddata(X,Y,f   .*mask,x,y);
+        pblh = griddata(X,Y,pblh.*mask,x,y);
+        GLW  = griddata(X,Y,GLW .*mask,x,y);
+        GSW  = griddata(X,Y,GSW .*mask,x,y);
+        LHF  = griddata(X,Y,LHF .*mask,x,y);
+        SHF  = griddata(X,Y,SHF .*mask,x,y);
+        SLP  = griddata(X,Y,SLP .*mask,x,y);
+        SST  = griddata(X,Y,SST .*mask,x,y);
+        U10  = griddata(X,Y,U10 .*mask,x,y);
+        V10  = griddata(X,Y,V10 .*mask,x,y);
         for k = 1:size(z,1)
-          if rough_dist
-            zS(k,:,:)          = interp2(X,Y,squeeze(z(k,:,:)),x,y); 
-            PS(k,:,:)          = interp2(X,Y,squeeze(P(k,:,:)),x,y); 
-            uS(k,:,:)          = interp2(X,Y,squeeze(u(k,:,:))         .*mask,x,y); 
-            vS(k,:,:)          = interp2(X,Y,squeeze(v(k,:,:))         .*mask,x,y); 
-            wS(k,:,:)          = interp2(X,Y,squeeze(w(k,:,:))         .*mask,x,y); 
-            avoS(k,:,:)        = interp2(X,Y,squeeze(avo(k,:,:))       .*mask,x,y); 
-            pvoS(k,:,:)        = interp2(X,Y,squeeze(pvo(k,:,:))       .*mask,x,y); 
-            rvoS(k,:,:)        = interp2(X,Y,squeeze(rvo(k,:,:))       .*mask,x,y); 
-            rhoS(k,:,:)        = interp2(X,Y,squeeze(rho(k,:,:))       .*mask,x,y);
-            thetaS(k,:,:)      = interp2(X,Y,squeeze(theta(k,:,:))     .*mask,x,y);
-            thetaES(k,:,:)     = interp2(X,Y,squeeze(thetaE(k,:,:))    .*mask,x,y);
-            DethDzS(k,:,:)     = interp2(X,Y,squeeze(DethDz(k,:,:))    .*mask,x,y);
-            H_DIABATICS(k,:,:) = interp2(X,Y,squeeze(H_DIABATIC(k,:,:)).*mask,x,y); 
-            QvS(k,:,:)         = interp2(X,Y,squeeze(Qv(k,:,:))        .*mask,x,y); 
-            QcS(k,:,:)         = interp2(X,Y,squeeze(Qc(k,:,:))        .*mask,x,y); 
-            QrS(k,:,:)         = interp2(X,Y,squeeze(Qr(k,:,:))        .*mask,x,y); 
-            QiS(k,:,:)         = interp2(X,Y,squeeze(Qi(k,:,:))        .*mask,x,y); 
-            QsS(k,:,:)         = interp2(X,Y,squeeze(Qs(k,:,:))        .*mask,x,y); 
-            QgS(k,:,:)         = interp2(X,Y,squeeze(Qg(k,:,:))        .*mask,x,y); 
-            QWS(k,:,:)         = interp2(X,Y,squeeze(QW(k,:,:))        .*mask,x,y);
-            QIS(k,:,:)         = interp2(X,Y,squeeze(QI(k,:,:))        .*mask,x,y);
-          else 
             zS(k,:,:)          = griddata(X,Y,squeeze(z(k,:,:)),x,y); 
             PS(k,:,:)          = griddata(X,Y,squeeze(P(k,:,:)),x,y); 
             uS(k,:,:)          = griddata(X,Y,squeeze(u(k,:,:))         .*mask,x,y); 
@@ -237,7 +158,6 @@ for T = T_beg:T_frq:T_end
             QgS(k,:,:)         = griddata(X,Y,squeeze(Qg(k,:,:))        .*mask,x,y); 
             QWS(k,:,:)         = griddata(X,Y,squeeze(QW(k,:,:))        .*mask,x,y);
             QIS(k,:,:)         = griddata(X,Y,squeeze(QI(k,:,:))        .*mask,x,y);
-          end
         end
         z              = zS;
         P              = PS;
@@ -291,7 +211,7 @@ for T = T_beg:T_frq:T_end
             'Qv','Qc','Qr','Qi','Qs','Qg','QW','QI',...
             'rho','uc','vc','w','f',...
             'u','v','M','avo','pvo','rvo',...
-            'lon_TC','lat_TC','slp_TC','swd_TC','u_TC','v_TC')
+            'lon_TC','lat_TC','slp_TC','swd_TC','u_TC','v_TC','center_motion_method','TC_center_valid')
 
         clear TIME lon lat 
         clear X Y z P

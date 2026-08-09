@@ -75,6 +75,28 @@ do i = 0,dimsizes(all_files)-1,1
   fileS->p = var
   delete(var)
 ;----------------------------------------------------------------------------
+; Pressure vertical velocity
+;----------------------------------------------------------------------------
+  varN  = "omega"
+  var   = wrf_user_getvar(a,varN,time)
+  var@description  = "Pressure vertical velocity"
+  var@units        = "Pa s-1"
+  fileO = fileI+"_omega.nc"
+  fileS = addfile(fileO, "c")
+  fileS->omega = var
+  delete(var)
+;----------------------------------------------------------------------------
+; Sea-level pressure (used for the instantaneous storm centre)
+;----------------------------------------------------------------------------
+  varN  = "slp"
+  var   = wrf_user_getvar(a,varN,time)
+  var@description = "Sea level pressure"
+  var@units = "hPa"
+  fileO = fileI+"_slp.nc"
+  fileS = addfile(fileO, "c")
+  fileS->slp = var
+  delete(var)
+;----------------------------------------------------------------------------
 ; dX length
 ;----------------------------------------------------------------------------
   varN  = "RDX"
@@ -540,6 +562,20 @@ do i = 0,dimsizes(all_files)-1,1
   fileS = addfile(fileO, "c")
   fileS->RTHBLTEN = var
   delete(var)
+;----------------------------------------------------------------------------
+; Theta Tendency due to Cumulus Parametrization
+;----------------------------------------------------------------------------
+  varN  = "RTHCUTEN"
+  if (isfilevar(a,varN)) then
+    var   = wrf_user_getvar(a,varN,time)
+    var   = var*24*60*60
+    var@description  = "THETA TENDENCY DUE TO CUMULUS PARAMETERIZATION"
+    var@units        = "K day-1"
+    fileO = fileI+"_"+varN+".nc"
+    fileS = addfile(fileO, "c")
+    fileS->RTHCUTEN = var
+    delete(var)
+  end if
 
 ; QV Budget
 ;----------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 function cfg = TC_track_config
 
 cfg.Time_beg = [2011 7 28];
-cfg.Time_end = [2011 8  6];
+cfg.Time_end = [2011 8 6];
 cfg.Ini_loc  = [135.8 11.4]; % Lon, Lat
 
 cfg.Input_dir  = '../Pre/SLP/DATA';

@@ -1,7 +1,6 @@
 clear
 clc
 
-warning off
 Run_dir = ['../'];
 addpath(Run_dir);
 start
@@ -25,6 +24,8 @@ mkdir(Fig_dir)
        
 file_name = [head_nam,'*_slp.nc'];        
 filename  = dir([Data_dir,'/',file_name]);
+[~, order] = sort({filename.name});
+filename = filename(order);
  
 count = 0;
 if ~isempty(filename)
