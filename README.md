@@ -5,6 +5,10 @@ WRF output.  It preprocesses fields, creates a supplied storm track, remaps
 fields into a common moving cylindrical frame, and diagnoses radial structure,
 momentum, multiscale energetics, and potential-vorticity budgets.
 
+## Author
+
+Yang Yu (`yang.yu@whoi.edu`)
+
 ## Requirements
 
 - MATLAB (checked with R2025b).
@@ -30,8 +34,12 @@ entry point calls the repository `start.m` script and adds the shared tools.
 | `TC_PVBG` | Dry/equivalent-potential-temperature PV diagnostics. | `TC_PVBG/Result` |
 | `Tool_box/Tools` | Shared first-party geometry, track, and I/O helpers. | — |
 
-Third-party content under `Tool_box` retains its own copyright and citation
-requirements.
+## Copyright and third-party notices
+
+Copyright (c) 2026 Yang Yu. All rights reserved unless otherwise stated.
+
+Third-party content under `Tool_box` retains its own copyright, license, and
+citation requirements.
 
 ## One-experiment workflow
 
