@@ -1,7 +1,6 @@
 clear
 clc
 
-warning off
 Run_dir = ['../'];
 addpath(Run_dir);
 start
@@ -38,73 +37,71 @@ if ~isempty(filename)
         dPhi       = load_data(fileN,'dPhi');
         lon        = load_data(fileN,'lon');
         lat        = load_data(fileN,'lat');
-        z          = load_data(fileN,'z');
         P          = load_data(fileN,'P');
         p          = P*100;
+        omega      = load_data(fileN,'omega');
         u          = load_data(fileN,'u');
         v          = load_data(fileN,'v');
-        w          = load_data(fileN,'w');
-        rho        = load_data(fileN,'rho');
         tk         = load_data(fileN,'tk');
         theta      = load_data(fileN,'theta');
-        thetaE     = load_data(fileN,'thetaE');
         H_DIABATIC = load_data(fileN,'H_DIABATIC');
         lon_TC     = load_data(fileN,'lon_TC');
         lat_TC     = load_data(fileN,'lat_TC');
-        slp_TC     = load_data(fileN,'slp_TC');
-        swd_TC     = load_data(fileN,'swd_TC');
+        lon_track  = load_data(fileN,'lon_track');
+        lat_track  = load_data(fileN,'lat_track');
+        center_slp = load_data(fileN,'center_slp');
+        slp_track  = load_data(fileN,'slp_track');
+        swd_track  = load_data(fileN,'swd_track');
+        heating_components_available = load_data(fileN,'heating_components_available');
+        u_TC = load_data(fileN,'u_TC'); v_TC = load_data(fileN,'v_TC');
+        center_motion_method = load_data(fileN,'center_motion_method');
 
         dr = dR*1000;
-        for k=1:size(z,1)
-            for j=1:size(z,2)
+        for k=1:size(P,1)
+            for j=1:size(P,2)
                 r(k,j,:) = R*1000;
             end
         end
         r(r==0) = NaN;
 
         disp(['Calculating...'])
-        for j=1:size(z,2)
+        for j=1:size(P,2)
             um(:,j,:)      = nanmean(u,2);
             vm(:,j,:)      = nanmean(v,2);
-            wm(:,j,:)      = nanmean(w,2);
-            Rm(:,j,:)      = nanmean(rho,2);
             Pm(:,j,:)      = nanmean(p,2);
+            omegam(:,j,:)  = nanmean(omega,2);
             Tm(:,j,:)      = nanmean(tk,2);
             thm(:,j,:)     = nanmean(theta,2);
-            thEm(:,j,:)    = nanmean(thetaE,2);
             Hm(:,j,:)      = nanmean(H_DIABATIC,2);
         end
 
         up   = u          - um;
         vp   = v          - vm;
-        wp   = w          - wm;
-        Rp   = rho        - Rm;
         Pp   = p          - Pm;
+        omegap = omega    - omegam;
         Tp   = tk         - Tm;
         thp  = theta      - thm;
-        thEp = thetaE     - thEm;
         Hp   = H_DIABATIC - Hm;
 
         dthmdr = dVdR(thm,dr);
-        dthmdz = dVdZ(thm,z);
         dTmdr  = dVdR(Tm,dr);
-        dTmdz  = dVdZ(Tm,z);
 
         Save_file = [Save_nam,'_',T_name,'.mat'];
         save([Save_dir,'/',Save_file],...
               'R','PHI','dR','dPhi','r','dr',...
-              'TIME','lon','lat','z','P','p',...
-              'u','v','w','rho','tk','theta','thetaE','H_DIABATIC',...
-              'um','vm','wm','Rm','Pm','Tm','thm','thEm','Hm',...
-              'up','vp','wp','Rp','Pp','Tp','thp','thEp','Hp',...
-              'dthmdr','dthmdz','dTmdr','dTmdz',...
-              'lon_TC','lat_TC','slp_TC','swd_TC')
+              'TIME','lon','lat','P','p','omega',...
+              'u','v','tk','theta','H_DIABATIC',...
+              'um','vm','Pm','Tm','thm','Hm','omegam',...
+              'up','vp','Pp','Tp','thp','Hp','omegap',...
+              'dthmdr','dTmdr',...
+              'lon_TC','lat_TC','lon_track','lat_track','center_slp','slp_track','swd_track',...
+              'u_TC','v_TC','center_motion_method','heating_components_available')
         clear R PHI dR dPhi r dr
-        clear TIME lon lat z P p
-        clear u v w rho tk theta thetaE H_DIABATIC
-        clear um vm wm Rm Pm Tm thm thEm Hm
-        clear up vp wp Rp Pp Tp thp thEp Hp
-        clear dthmdr dthmdz dTmdr dTmdz
-        clear lon_TC lat_TC slp_TC swd_TC
+        clear TIME lon lat P p omega
+        clear u v tk theta H_DIABATIC
+        clear um vm Pm Tm thm Hm omegam
+        clear up vp Pp Tp thp Hp omegap
+        clear dthmdr dTmdr
+        clear lon_TC lat_TC lon_track lat_track center_slp slp_track swd_track u_TC v_TC center_motion_method heating_components_available
     end
 end

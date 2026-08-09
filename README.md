@@ -1,213 +1,89 @@
 # TC_tool
 
-`TC_tool` is a MATLAB/NCL toolbox collection for tropical-cyclone diagnostics
-from WRF output. It preprocesses WRF fields, detects and tracks the storm
-center, remaps WRF variables into storm-following coordinates, and diagnoses
-momentum, kinetic-energy, and potential-vorticity budgets.
-
-## Copyright
-
-Copyright (c) 2026 Yang Yu. All rights reserved unless otherwise stated.
-
-This repository also includes third-party MATLAB toolboxes and supporting data
-under `Tool_box`. Those components keep their original copyright notices,
-licenses, and citation requirements.
-
-## Contact
-
-For questions, bug reports, or collaboration requests, contact:
-
-- Email: `yang.yu@whoi.edu`
-- GitHub: `https://github.com/yangyu-climate/TC_tool`
-
-## Repository Layout
-
-```text
-TC_tool/
-|-- start.m              # Adds Tool_box paths for MATLAB
-|-- Pre/                 # NCL preprocessing scripts for WRF output
-|-- TC_track/            # Tropical cyclone center detection and tracking
-|-- TC_Rfield/           # Storm-following radial structure fields
-|-- TC_MBG/              # Momentum budget diagnostics
-|-- TC_KEBG/             # Kinetic-energy budget diagnostics
-|-- TC_PVBG/             # Potential-vorticity budget diagnostics
-|-- Tool_box/            # MATLAB helper functions and third-party toolboxes
-`-- README/              # Detailed module-level documentation
-```
+`TC_tool` is a MATLAB/NCL library for tropical-cyclone diagnostics from
+WRF output.  It preprocesses fields, creates a supplied storm track, remaps
+fields into a common moving cylindrical frame, and diagnoses radial structure,
+momentum, multiscale energetics, and potential-vorticity budgets.
 
 ## Requirements
 
-- MATLAB, tested with MATLAB R2021b and MATLAB R2025b.
-- NCL with the WRF NCL scripts available through `NCARG_ROOT`.
-- WRF output files using the configured domain prefix, for example
-  `wrfout_d03`.
-- A POSIX-compatible shell for `Run.sh` wrappers. On Windows, run each module's
-  `Run.m` from MATLAB instead.
+- MATLAB (checked with R2025b).
+- NCL with WRF support for the `Pre` export scripts.
+- WRF outputs with the configured prefix (normally `wrfout_d03`).
+- A POSIX shell only if the optional `Run.sh` wrappers are used; on Windows use
+  the corresponding `Run.m` entry point.
 
-Before running MATLAB modules, start MATLAB from the repository root and run:
+Before running a MATLAB module, start it from its module directory. Each
+entry point calls the repository `start.m` script and adds the shared tools.
 
-```matlab
-start
-```
+## Library layout
 
-This adds `Tool_box` and its configured subdirectories to the MATLAB path.
+| Directory | Purpose | Primary output |
+| --- | --- | --- |
+| `Pre/SLP` | Export fields needed for centre detection and tracking. | `Pre/SLP/DATA` |
+| `Pre/BGT` | Export fields for MBG, KEBG, and PVBG. | `Pre/BGT/DATA` |
+| `Pre/PHY` | Export physical and radial-structure fields. | `Pre/PHY/DATA` |
+| `TC_track` | Detect and construct the supplied storm track. | `TC_track/Result/Track_data.mat` |
+| `TC_Rfield` | Storm-following Cartesian/radial fields. | `TC_Rfield/Result` |
+| `TC_MBG` | Mean and eddy momentum budgets. | `TC_MBG/Result` |
+| `TC_KEBG` | Azimuthal-wavenumber KE/APE energetics. | `TC_KEBG/Result` |
+| `TC_PVBG` | Dry/equivalent-potential-temperature PV diagnostics. | `TC_PVBG/Result` |
+| `Tool_box/Tools` | Shared first-party geometry, track, and I/O helpers. | — |
 
-## Workflow
+Third-party content under `Tool_box` retains its own copyright and citation
+requirements.
 
-The usual processing order is:
+## One-experiment workflow
 
-1. Run the relevant `Pre` preprocessing scripts to create WRF-derived NetCDF
-   files.
-2. Run `TC_track` to produce `TC_track/Result/Track_data.mat`.
-3. Run one or more downstream diagnostics:
-   - `TC_Rfield`
-   - `TC_MBG`
-   - `TC_KEBG`
-   - `TC_PVBG`
+1. Set the `dir` path in each required NCL exporter to that experiment's WRF
+   output directory. The three scripts are independent: verify every edited
+   script points to the same experiment before execution. Run the needed exporter(s): `Pre/SLP` for tracking,
+   `Pre/BGT` for MBG/KEBG/PVBG, and `Pre/PHY` for Rfield.
+2. Run `TC_track/Run.m` to create `Track_data.mat`.
+3. Set the case time range, grid, track path, file prefix, and module-specific
+   input/output paths in the selected `*_config.m`. Do this separately for
+   CTRL and NoTCFB; do not mix their
+   preprocessed files, tracks, or remapped products.
+4. Run the module's `Run.m`. KEBG always runs remapping, azimuthal processing,
+   and the energy calculation in that order.
 
-Each module has a `Run.m` entry point. For example:
+## Shared diagnostic contract
 
-```matlab
-cd TC_track
-Run
-```
+- `LON/LAT` in `Track_data.mat` is the sole storm centre for all first-party
+  remapping. Legacy `LON_W/LAT_W` fields remain in the track file for backward
+  compatibility and are not used as a diagnostic centre.
+- `CENTER_VALID` and `CENTER_HELD` identify a detected centre and a
+  carry-forward placeholder, respectively. Remapping rejects held centres;
+  it also rejects samples adjacent to a held centre because their translating
+  velocity is undefined. Rerun `TC_track` before using any existing track file
+  created without these fields.
+- `tc_track_motion` calculates the translating-frame velocity by geodesic
+  finite difference of that same track.
+- `tc_match_track_time` selects only a nearest track point within half the
+  output interval; unmatched outputs are skipped rather than silently paired.
+- `tc_great_circle_xy` defines the local east/north coordinates from spherical
+  great-circle distance and bearing. The first-party remappers do not use the
+  old fixed-grid distance approximation.
+- Remapped output stores `lon_TC`, `lat_TC`, `u_TC`, `v_TC`, and
+  `center_motion_method` for provenance.
 
-## Preprocessing
+## Scientific scope and verification
 
-`Pre` contains three preprocessing groups:
+`TC_KEBG` is the multiscale A1--A6 module. Its implementation uses a
+dimensionally consistent local APE norm by default and writes a residual
+diagnostic closure; see [TC_KEBG/README.md](TC_KEBG/README.md) for equations,
+signs, units, inputs, and known limits. This residual is not a
+process-separated total-energy budget: pressure work, friction, diffusion,
+and boundary fluxes need additional WRF tendency diagnostics.
 
-- `Pre/SLP`: fields required by `TC_track`.
-- `Pre/PHY`: fields required by `TC_Rfield`.
-- `Pre/BGT`: fields required by `TC_MBG`, `TC_KEBG`, and `TC_PVBG`.
+`TC_MBG`, `TC_PVBG`, and `TC_Rfield` retain their own diagnostic equations and
+outputs, but use the same centre/time/geometry contract. Static MATLAB checks
+and analytic tests of the shared helpers do not replace end-to-end validation:
+before interpreting results, verify NetCDF dimensions/units, track quality,
+time coverage, and sensitivity to grid and boundary choices with a real case.
 
-Each group contains:
-
-- `NCL_WRF_DATA.ncl`
-- `Run.sh`
-- `link_wrf_data.sh`
-
-The preprocessing scripts are case-specific and may contain local absolute WRF
-data paths. Update those paths only when moving the workflow to another case or
-machine.
-
-## Module Summary
-
-### TC_track
-
-Detects and tracks the tropical cyclone center from WRF-derived 2 km pressure,
-sea-level pressure, and 10 m wind fields.
-
-Main output:
-
-- `TC_track/Result/Track_data.mat`
-
-Detailed documentation:
-
-- `README/README.TC_track`
-
-### TC_Rfield
-
-Uses the track file to remap WRF variables into storm-following Cartesian and
-radial grids, then produces radial and selected-level diagnostics.
-
-Main outputs:
-
-- `TC_Rfield/Result/MVCT`
-- `TC_Rfield/Result/SLICE`
-- `TC_Rfield/Result/VLEVEL`
-
-Detailed documentation:
-
-- `README/README.TC_Rfield`
-
-### TC_MBG
-
-Calculates mean and eddy radial/tangential momentum budget terms in a
-storm-following cylindrical coordinate system.
-
-Main outputs:
-
-- `TC_MBG/Result/Data`
-- `TC_MBG/Result/azimuthally`
-- `TC_MBG/Result/MBG`
-
-Detailed documentation:
-
-- `README/README.TC_MBG`
-
-### TC_KEBG
-
-Diagnoses tropical-cyclone kinetic-energy and available-potential-energy budget
-terms by azimuthal wavenumber.
-
-Main outputs:
-
-- `TC_KEBG/Result/Data`
-- `TC_KEBG/Result/azimuthally`
-- `TC_KEBG/Result/KEBG`
-
-Detailed documentation:
-
-- `README/README.TC_KEBG`
-
-### TC_PVBG
-
-Diagnoses generalized Ertel potential-vorticity budgets using either dry
-potential temperature or equivalent potential temperature.
-
-Main outputs:
-
-- `TC_PVBG/Result/Data`
-- `TC_PVBG/Result/PVBG`
-
-Detailed documentation:
-
-- `README/README.TC_PVBG`
-- `TC_PVBG/doc/PV_Budget_Equations.docx`
-
-## Key Inputs
-
-Most downstream modules require:
-
-- `TC_track/Result/Track_data.mat`
-- Preprocessed WRF files in one of:
-  - `Pre/SLP/DATA`
-  - `Pre/PHY/DATA`
-  - `Pre/BGT/DATA`
-
-`Track_data.mat` is expected to contain:
-
-- `TIME`
-- `LON`
-- `LAT`
-- `SLP`
-- `SWD`
-- `LON_W`
-- `LAT_W`
-
-## Current Verification Notes
-
-Static MATLAB checks were last run with MATLAB R2025b Update 5 on 2026-07-14:
-
-- First-party workflow files: 24 MATLAB files, 456 `checkcode` messages.
-- `Tool_box`: 733 MATLAB files, 6684 `checkcode` messages.
-- No syntax-level blocking errors were found in the MATLAB workflow files.
-
-NetCDF reading now uses MATLAB's built-in NetCDF interface in `ncload_0D`,
-`ncload_2D`, and `ncload_3D` instead of the legacy `mexcdf/ncmex` interface.
-The replacement preserves the legacy toolbox dimension order expected by the
-analysis code:
-
-- 2D NetCDF data are returned as `[y x]`.
-- 3D NetCDF data are returned as `[z y x]`.
-
-This NetCDF compatibility layer was regression-tested with MATLAB R2021b and
-MATLAB R2025b using non-square 2D and 3D test files.
-
-Full numerical validation requires real WRF-derived input data and a generated
-`TC_track/Result/Track_data.mat` file.
-
-## Detailed Documentation
-
-For scientific assumptions, equations, saved variables, and module-specific
-configuration options, read the module README files under `README/`.
+For MBG, `cfg.calc.Subgrid_momentum_mode` selects either the direct WRF PBL
+momentum tendency (default) or the diagnosed `kh/kv` stress divergence for the
+budget sum. They are alternative representations and are never summed
+together. PVBG dry-theta heating is the exported resolved set of theta
+tendencies; unresolved tendencies remain in `PV_residual`.

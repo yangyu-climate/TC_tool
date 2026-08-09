@@ -1,7 +1,6 @@
 clear
 clc
 
-warning off
 Run_dir = ['../'];
 addpath(Run_dir);
 start
@@ -39,6 +38,8 @@ for T_D = T_beg:T_end
   disp(T_name)
   file_name = ['*',T_name,'*'];
   filename  = dir([Data_dir,'/',file_name]);
+  [~, order] = sort({filename.name});
+  filename = filename(order);
 
   if ~isempty(filename)
     for N = 1:length(filename)
@@ -48,13 +49,16 @@ for T_D = T_beg:T_end
       fileN = [Data_dir,'/',file_name];
       load(fileN)
 
-      if ~isnan(nanmean(tc_lon.*tc_lat))
+      valid_center = isfinite(tc_lon) & isfinite(tc_lat);
+      if any(valid_center)
+        CENTER_VALID(NUM) = true;
+        CENTER_HELD(NUM) = false;
         if NUM==1
           x   = Ini_loc(1);
           y   = Ini_loc(2);
-          DD  = (tc_lon-x).^2 + (tc_lat-y).^2;
-          loc = find(DD==min(DD));
-          loc = min(loc);
+          [DD,~,~] = tc_great_circle_xy(tc_lat,tc_lon,y,x);
+          DD(~valid_center) = Inf;
+          [~, loc] = min(DD(:));
           LON(NUM)   = tc_lon(loc);
           LAT(NUM)   = tc_lat(loc);
           SLP(NUM)   = tc_p(loc);
@@ -65,9 +69,9 @@ for T_D = T_beg:T_end
         else
           x   = LON(NUM-1);
           y   = LAT(NUM-1);
-          DD  = (tc_lon-x).^2 + (tc_lat-y).^2;
-          loc = find(DD==min(DD));
-          loc = min(loc);
+          [DD,~,~] = tc_great_circle_xy(tc_lat,tc_lon,y,x);
+          DD(~valid_center) = Inf;
+          [~, loc] = min(DD(:));
           LON(NUM)   = tc_lon(loc);
           LAT(NUM)   = tc_lat(loc);
           SLP(NUM)   = tc_p(loc);
@@ -78,6 +82,8 @@ for T_D = T_beg:T_end
         end
       else
         if NUM>1
+          CENTER_VALID(NUM) = false;
+          CENTER_HELD(NUM) = true;
           LON(NUM)   = LON(NUM-1);
           LAT(NUM)   = LAT(NUM-1);
           SLP(NUM)   = SLP(NUM-1);
@@ -95,4 +101,4 @@ for T_D = T_beg:T_end
 
 end
 
-save([Save_dir,'/Track_data.mat'],'TIME','LON','LAT','SLP','SWD','LON_W','LAT_W')
+save([Save_dir,'/Track_data.mat'],'TIME','LON','LAT','SLP','SWD','LON_W','LAT_W','CENTER_VALID','CENTER_HELD')

@@ -1,7 +1,6 @@
 clear
 clc
 
-warning off
 Run_dir = ['../'];
 addpath(Run_dir);
 start
@@ -18,6 +17,7 @@ Time_beg   = cfg.Time_beg;
 Time_end   = cfg.Time_end;
 Time_frq   = cfg.Time_frq;
 Tendency_frq = cfg.calc.Tendency_frq;
+Subgrid_momentum_mode = cfg.calc.Subgrid_momentum_mode;
                        % i.e. dt=2*Tendency_frq (minute) or dt=Tendency_frq(BC)
                        % second order accurary useing Tendency_frq=Time_frq
 
@@ -250,13 +250,27 @@ for T = T_beg:T_frq:T_end
         Upbl   = squeeze(nanmean(Upbl,2));
          
  
-        % Budget closure diagnostics
+        % Budget closure diagnostics.  Direct WRF PBL tendencies and the
+        % kh/kv stress-tensor diagnostic represent alternative subgrid
+        % forcings, so including both would double count mixing.
+        switch lower(Subgrid_momentum_mode)
+            case 'wrf_pbl_tendency'
+                V_subgrid = Vpbl;
+                U_subgrid = Upbl;
+                Subgrid_momentum_source = 'direct_WRF_PBL_tendency';
+            case 'khkv_stress'
+                V_subgrid = Vd;
+                U_subgrid = Ud;
+                Subgrid_momentum_source = 'diagnosed_kh_kv_stress';
+            otherwise
+                error('TC_MBG:SubgridMode','Unknown cfg.calc.Subgrid_momentum_mode: %s',Subgrid_momentum_mode)
+        end
         % V component
         Cadd_V(1,:,:) = Vmzeta;
         Cadd_V(2,:,:) = Vmv;
         Cadd_V(3,:,:) = Vezeta;
         Cadd_V(4,:,:) = Vev;
-        Cadd_V(5,:,:) = Vpbl;
+        Cadd_V(5,:,:) = V_subgrid;
         Sum_V      = squeeze(nansum(Cadd_V));
         Residual_V = Vt - Sum_V;
         % U component
@@ -266,7 +280,7 @@ for T = T_beg:T_frq:T_end
         Cadd_U(4,:,:) = Uev;
         Cadd_U(5,:,:) = Umagf;
         Cadd_U(6,:,:) = Ueagf;
-        Cadd_U(7,:,:) = Upbl;
+        Cadd_U(7,:,:) = U_subgrid;
         Sum_U      = squeeze(nansum(Cadd_U));
         Residual_U = Ut - Sum_U;
         clear Cadd_V Cadd_U
@@ -276,17 +290,17 @@ for T = T_beg:T_frq:T_end
         Save_file = [Save_nam,'_',T_name,'.mat'];
         save([Save_dir,'/',Save_file],...
         'R','PHI','dR','dPhi','dr','dt',...
-        'Tendency_scheme','Pressure_gradient_unit',...
+        'Tendency_scheme','Pressure_gradient_unit','Subgrid_momentum_mode','Subgrid_momentum_source',...
         'TIME','z','P','u','v',...
         'Vt','Vmzeta','Vmv','Vezeta','Vev','Vd','Vdr','Vdz','Vpbl',...
         'Ut','Umr','Ueh','Umv','Uev','Umagf','Ueagf','Ud','Udh','Udz','Upbl',...
-        'Sum_V','Residual_V','Sum_U','Residual_U',...
+        'V_subgrid','U_subgrid','Sum_V','Residual_V','Sum_U','Residual_U',...
         'lon_TC','lat_TC','slp_TC','swd_TC')
         
         clear R PHI dR dPhi r dr
         clear TIME dt Tendency_scheme Pressure_gradient_unit lon lat z P f u v
-        clear Vt Vmzeta Vmv Vezeta Vev Vd Vdr Vdz Vpbl
-        clear Ut Umr Ueh Umv Uev Umagf Ueagf Ud Udh Udz Upbl
+        clear Vt Vmzeta Vmv Vezeta Vev Vd Vdr Vdz Vpbl V_subgrid
+        clear Ut Umr Ueh Umv Uev Umagf Ueagf Ud Udh Udz Upbl U_subgrid
         clear Sum_V Residual_V Sum_U Residual_U
         clear lon_TC lat_TC slp_TC swd_TC
 
