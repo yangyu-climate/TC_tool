@@ -99,17 +99,18 @@ for T = T_beg:T_frq:T_end
         if IF_Zfix
           for i=1:size(x,1)
             for j = 1:size(y,2) 
-              zS(:,i,j)     = z_hight; 
-              PS(:,i,j)     = interp1(squeeze(z(:,i,j)),squeeze(P(:,i,j))   ,z_hight); 
-              uS(:,i,j)     = interp1(squeeze(z(:,i,j)),squeeze(u(:,i,j))   ,z_hight); 
-              vS(:,i,j)     = interp1(squeeze(z(:,i,j)),squeeze(v(:,i,j))   ,z_hight); 
-              wS(:,i,j)     = interp1(squeeze(z(:,i,j)),squeeze(w(:,i,j))   ,z_hight); 
-              khS(:,i,j)    = interp1(squeeze(z(:,i,j)),squeeze(kh(:,i,j))  ,z_hight);
-              kvS(:,i,j)    = interp1(squeeze(z(:,i,j)),squeeze(kv(:,i,j))  ,z_hight); 
-              RUBLTENS(:,i,j)= interp1(squeeze(z(:,i,j)),squeeze(RUBLTEN(:,i,j)),z_hight);
-              RVBLTENS(:,i,j)= interp1(squeeze(z(:,i,j)),squeeze(RVBLTEN(:,i,j)),z_hight);
-              avoS(:,i,j)   = interp1(squeeze(z(:,i,j)),squeeze(avo(:,i,j)) ,z_hight); 
-              rhoS(:,i,j)   = interp1(squeeze(z(:,i,j)),squeeze(rho(:,i,j)) ,z_hight);
+              [zq,iq]        = unique_sorted_height(squeeze(z(:,i,j)));
+              zS(:,i,j)      = z_hight;
+              PS(:,i,j)      = interpolate_height(zq,iq,squeeze(P(:,i,j)),z_hight);
+              uS(:,i,j)      = interpolate_height(zq,iq,squeeze(u(:,i,j)),z_hight);
+              vS(:,i,j)      = interpolate_height(zq,iq,squeeze(v(:,i,j)),z_hight);
+              wS(:,i,j)      = interpolate_height(zq,iq,squeeze(w(:,i,j)),z_hight);
+              khS(:,i,j)     = interpolate_height(zq,iq,squeeze(kh(:,i,j)),z_hight);
+              kvS(:,i,j)     = interpolate_height(zq,iq,squeeze(kv(:,i,j)),z_hight);
+              RUBLTENS(:,i,j)= interpolate_height(zq,iq,squeeze(RUBLTEN(:,i,j)),z_hight);
+              RVBLTENS(:,i,j)= interpolate_height(zq,iq,squeeze(RVBLTEN(:,i,j)),z_hight);
+              avoS(:,i,j)    = interpolate_height(zq,iq,squeeze(avo(:,i,j)),z_hight);
+              rhoS(:,i,j)    = interpolate_height(zq,iq,squeeze(rho(:,i,j)),z_hight);
             end
           end
           z    = zS;
@@ -187,4 +188,26 @@ for T = T_beg:T_frq:T_end
 
         end
     end
+end
+
+function [zq,iq] = unique_sorted_height(z)
+valid = isfinite(z);
+z = z(valid);
+original_index = find(valid);
+[zq,order] = sort(z);
+original_index = original_index(order);
+[zq,unique_index] = unique(zq,'stable');
+iq = original_index(unique_index);
+end
+
+function value = interpolate_height(zq,iq,source,target)
+value = NaN(size(target));
+if numel(zq) < 2
+    return
+end
+source = source(iq);
+valid = isfinite(source);
+if nnz(valid) >= 2
+    value = interp1(zq(valid),source(valid),target,'linear',NaN);
+end
 end

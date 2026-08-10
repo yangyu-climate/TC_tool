@@ -14,8 +14,7 @@ for i =1:size(slp,1)
     end
 end
 
-%dist = R.*sqrt((lon-lon(Ig,Jg)).^2+(lat-lat(Ig,Jg)).^2);
-dist = resolution.*sqrt((I_M-Ig).^2+(J_M-Jg).^2);
+[dist,~,~] = tc_great_circle_xy(lat,lon,lat(Ig,Jg),lon(Ig,Jg));
 mask = NaN*ones(size(dist));
 mask(dist<=R_lim)=1;
 
@@ -53,8 +52,7 @@ for iter = 1:max_iter
     Ig = It;
     Jg = Jt;
     
-%    dist = R.*sqrt((lon-lon(Ig,Jg)).^2+(lat-lat(Ig,Jg)).^2);
-    dist = resolution.*sqrt((I_M-Ig).^2+(J_M-Jg).^2);
+    [dist,~,~] = tc_great_circle_xy(lat,lon,lat(Ig,Jg),lon(Ig,Jg));
     mask = NaN*ones(size(dist));
     mask(dist<=R_lim)=1;
 

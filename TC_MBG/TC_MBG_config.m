@@ -9,7 +9,10 @@ cfg.dPhi = pi/180; % rad
 cfg.Track_file = '../TC_track/Result/Track_data.mat';
 cfg.Head_nam = 'wrfout_d03';
 
-cfg.IF_Zfix = 0;
+% The cylindrical momentum equations use horizontal derivatives at fixed
+% geometric height.  Keep this enabled unless running a deliberate
+% model-level sensitivity experiment.
+cfg.IF_Zfix = 1;
 cfg.z_limit = 20000;   % m
 cfg.z_level = 500;     % m
 cfg.z_low   = 1000;    % m

@@ -13,8 +13,7 @@ for i =1:size(slp,1)
     end
 end
 
-%dist = R.*sqrt((lon-lon(Ig,Jg)).^2+(lat-lat(Ig,Jg)).^2);
-dist = resolution.*sqrt((I_M-Ig).^2+(J_M-Jg).^2);
+[dist,~,~] = tc_great_circle_xy(lat,lon,lat(Ig,Jg),lon(Ig,Jg));
 mask = NaN*ones(size(dist));
 mask(dist<=R_lim)=1;
 
@@ -24,7 +23,14 @@ P_lim = nanmax(nanmax(SLP));
 P = P_lim*ones(size(SLP));
 P = P-SLP;
 
-LON = (mean_2D(P.*lon)/mean_2D(P.*mask));
-LAT = (mean_2D(P.*lat)/mean_2D(P.*mask));
+weight = P.*mask;
+% Average longitude on the unit circle so a pressure deficit straddling the
+% date line is centred near 180 degrees rather than near 0 degrees.
+lon_rad = deg2rad(lon);
+LON = rad2deg(atan2(mean_2D(weight.*sin(lon_rad)),...
+                    mean_2D(weight.*cos(lon_rad))));
+% Preserve the longitude convention of the source grid (for example 0--360).
+LON = lon(Ig,Jg) + mod(LON-lon(Ig,Jg)+180,360)-180;
+LAT = mean_2D(weight.*lat)/mean_2D(weight);
 
 disp(['lon:',num2str(LON),' lat:',num2str(LAT)])

@@ -354,7 +354,7 @@ a=squeeze(A(:,ix,:));
 end
 function D = phi_derivative(A,C)
 D=A; for k=0:C.N, D(:,k+1,:)=1i*k*A(:,k+1,:); end
-for k=1:C.N-1, D(:,C.nphi-k+1,:)=-1i*k*A(:,C.nphi-k+1,:); end
+for k=1:C.N, D(:,C.nphi-k+1,:)=-1i*k*A(:,C.nphi-k+1,:); end
 end
 
 function d = deriv_r(a,r)
@@ -408,6 +408,12 @@ C=make_coefficients(u,v,z,z,z,nphi); [~,~,~,A2,A2low,A2high,A2triad,mWN]=spectra
 assert(max(abs(A2-A2low-A2high),[],'all','omitnan')<1e-10,'A2 m-group partition failed')
 assert(size(A2triad,4)==numel(mWN),'A2 triad tensor index failed')
 assert(max(abs(A2(:,:,2:end)-sum(double(A2triad),4,'omitnan')),[],'all','omitnan')<1e-6,'A2 triad reconstruction failed')
+% The highest retained negative Fourier mode must receive its derivative.
+% This catches the even-grid off-by-one error that otherwise affects A2.
+A=zeros(1,nphi,1); A(1,nphi-C.N+1,1)=1;
+D=phi_derivative(A,C);
+assert(abs(D(1,nphi-C.N+1,1)+1i*C.N)<1e-12,...
+    'Negative highest retained Fourier-mode derivative invariant failed')
 [kr,ar]=resolved_energy_rhs(ones(3,3),ones(3,3,2),2*ones(3,3,2),3*ones(3,3,2),4*ones(3,3,2),5*ones(3,3,2),6*ones(3,3,2));
 assert(all(kr(:,:,1)==6,'all') && all(ar(:,:,1)==-2,'all') && ...
        all(kr(:,:,2)==9,'all') && all(ar(:,:,2)==-2,'all'),'Closure RHS partition failed')

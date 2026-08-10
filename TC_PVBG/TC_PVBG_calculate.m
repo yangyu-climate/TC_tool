@@ -339,18 +339,7 @@ end
 end
 
 function dpv = d_phi_3d(v,dPhi)
-
-dpv = NaN(size(v));
-nphi = size(v,2);
-for k=1:size(v,1)
-    for j=1:size(v,3)
-        x = squeeze(v(k,:,j));
-        dpv(k,:,j) = (circshift(x,[0 -1]) - circshift(x,[0 1]))/(2*dPhi);
-        if nphi<3
-            dpv(k,:,j) = gradient(x)./dPhi;
-        end
-    end
-end
+dpv = cylindrical_phi_derivative(v,dPhi);
 end
 
 function dzv = d_z_3d(v,z)

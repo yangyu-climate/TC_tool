@@ -159,7 +159,9 @@ Saved terms:
 - Umv: minus mean vertical advection of mean radial momentum
 - Uev: minus eddy vertical advection of eddy radial momentum
 - Umagf: mean agradient force
-- Ueagf: eddy agradient force
+- Upressure: exact azimuthal mean radial pressure-gradient acceleration,
+  computed as `<-(1/rho) dp/dr>` before averaging
+- Ueagf: eddy curvature contribution to the agradient force
 - Ud: total radial kh/kv stress-tensor diffusion diagnostic
 - Udh: horizontal part of Ud
 - Udz: vertical part of Ud
@@ -252,10 +254,13 @@ Detailed Calculation Notes
 
    `Ut = -Umr - Ueh + Umv + Uev + Umagf + Ueagf + Upbl + Residual_U`
 
-   The pressure-gradient parts of `Umagf` and `Ueagf` use pressure in Pa and
-   density in kg/m3, so their units are m/s2. The saved
-   `Pressure_gradient_unit` records whether the current run used native Pa
-   intermediate fields or converted old hPa fields during calculation.
+The radial pressure-gradient acceleration is evaluated at every azimuth point
+as `-(1/rho) dp/dr` using pressure in Pa, and only then azimuthally averaged
+into `Upressure`. This retains density--pressure-gradient covariance that is
+lost in the approximation `-(1/<rho>)d<p>/dr`. `Umagf` includes `Upressure`;
+`Ueagf` contains the eddy curvature contribution. The saved
+`Pressure_gradient_unit` records whether the current run used native Pa
+intermediate fields or converted old hPa fields during calculation.
 
    `Sum_V`, `Sum_U`, `Residual_V`, and `Residual_U` are saved so the user can
    directly evaluate budget closure.

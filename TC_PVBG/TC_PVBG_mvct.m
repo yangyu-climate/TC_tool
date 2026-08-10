@@ -101,24 +101,23 @@ for T = T_beg:T_frq:T_end
             if IF_Zfix
                 for i=1:size(lon,1)
                     for j=1:size(lon,2)
-                        z_col = squeeze(z(:,i,j));
-                        valid_z = find(~isnan(z_col));
-                        if length(valid_z)>=2
+                        [z_col,level_index] = unique_sorted_height(squeeze(z(:,i,j)));
+                        if numel(z_col)>=2
                             zS(:,i,j)          = z_fix;
-                            PS(:,i,j)          = interp1(z_col(valid_z),squeeze(P(valid_z,i,j)),z_fix);
-                            uS(:,i,j)          = interp1(z_col(valid_z),squeeze(u(valid_z,i,j)),z_fix);
-                            vS(:,i,j)          = interp1(z_col(valid_z),squeeze(v(valid_z,i,j)),z_fix);
-                            wS(:,i,j)          = interp1(z_col(valid_z),squeeze(w(valid_z,i,j)),z_fix);
-                            rhoS(:,i,j)        = interp1(z_col(valid_z),squeeze(rho(valid_z,i,j)),z_fix);
-                            avoS(:,i,j)        = interp1(z_col(valid_z),squeeze(avo(valid_z,i,j)),z_fix);
-                            khS(:,i,j)         = interp1(z_col(valid_z),squeeze(kh(valid_z,i,j)),z_fix);
-                            kvS(:,i,j)         = interp1(z_col(valid_z),squeeze(kv(valid_z,i,j)),z_fix);
-                            RUBLTENS(:,i,j)    = interp1(z_col(valid_z),squeeze(RUBLTEN(valid_z,i,j)),z_fix);
-                            RVBLTENS(:,i,j)    = interp1(z_col(valid_z),squeeze(RVBLTEN(valid_z,i,j)),z_fix);
-                            pvoS(:,i,j)        = interp1(z_col(valid_z),squeeze(pvo(valid_z,i,j)),z_fix);
-                            thetaS(:,i,j)      = interp1(z_col(valid_z),squeeze(theta(valid_z,i,j)),z_fix);
-                            thetaES(:,i,j)     = interp1(z_col(valid_z),squeeze(thetaE(valid_z,i,j)),z_fix);
-                            H_DIABATICS(:,i,j) = interp1(z_col(valid_z),squeeze(H_DIABATIC(valid_z,i,j)),z_fix);
+                            PS(:,i,j)          = interpolate_height(z_col,level_index,squeeze(P(:,i,j)),z_fix);
+                            uS(:,i,j)          = interpolate_height(z_col,level_index,squeeze(u(:,i,j)),z_fix);
+                            vS(:,i,j)          = interpolate_height(z_col,level_index,squeeze(v(:,i,j)),z_fix);
+                            wS(:,i,j)          = interpolate_height(z_col,level_index,squeeze(w(:,i,j)),z_fix);
+                            rhoS(:,i,j)        = interpolate_height(z_col,level_index,squeeze(rho(:,i,j)),z_fix);
+                            avoS(:,i,j)        = interpolate_height(z_col,level_index,squeeze(avo(:,i,j)),z_fix);
+                            khS(:,i,j)         = interpolate_height(z_col,level_index,squeeze(kh(:,i,j)),z_fix);
+                            kvS(:,i,j)         = interpolate_height(z_col,level_index,squeeze(kv(:,i,j)),z_fix);
+                            RUBLTENS(:,i,j)    = interpolate_height(z_col,level_index,squeeze(RUBLTEN(:,i,j)),z_fix);
+                            RVBLTENS(:,i,j)    = interpolate_height(z_col,level_index,squeeze(RVBLTEN(:,i,j)),z_fix);
+                            pvoS(:,i,j)        = interpolate_height(z_col,level_index,squeeze(pvo(:,i,j)),z_fix);
+                            thetaS(:,i,j)      = interpolate_height(z_col,level_index,squeeze(theta(:,i,j)),z_fix);
+                            thetaES(:,i,j)     = interpolate_height(z_col,level_index,squeeze(thetaE(:,i,j)),z_fix);
+                            H_DIABATICS(:,i,j) = interpolate_height(z_col,level_index,squeeze(H_DIABATIC(:,i,j)),z_fix);
                         else
                             zS(:,i,j)          = z_fix;
                             PS(:,i,j)          = NaN(size(z_fix));
@@ -269,18 +268,7 @@ end
 end
 
 function dpv = d_phi_3d(v,dPhi)
-
-dpv = NaN(size(v));
-nphi = size(v,2);
-for k=1:size(v,1)
-    for j=1:size(v,3)
-        x = squeeze(v(k,:,j));
-        dpv(k,:,j) = (circshift(x,[0 -1]) - circshift(x,[0 1]))/(2*dPhi);
-        if nphi<3
-            dpv(k,:,j) = gradient(x)./dPhi;
-        end
-    end
-end
+dpv = cylindrical_phi_derivative(v,dPhi);
 end
 
 function dzv = d_z_3d(v,z)
@@ -292,5 +280,27 @@ for i=1:size(v,2)
         V = squeeze(v(:,i,j));
         dzv(:,i,j) = gradient(V)./gradient(Z);
     end
+end
+end
+
+function [zq,iq] = unique_sorted_height(z)
+valid = isfinite(z);
+z = z(valid);
+original_index = find(valid);
+[zq,order] = sort(z);
+original_index = original_index(order);
+[zq,unique_index] = unique(zq,'stable');
+iq = original_index(unique_index);
+end
+
+function value = interpolate_height(zq,iq,source,target)
+value = NaN(size(target));
+if numel(zq) < 2
+    return
+end
+source = source(iq);
+valid = isfinite(source);
+if nnz(valid) >= 2
+    value = interp1(zq(valid),source(valid),target,'linear',NaN);
 end
 end

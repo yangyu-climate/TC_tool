@@ -183,27 +183,26 @@ for T = T_beg:T_frq:T_end
         disp(['Calculating... : Umagf'])
         vm    = load_data([file_TN,'.mat'],'vm');
         F     = load_data([file_TN,'.mat'],'F');
-        Pm    = load_data([file_TN,'.mat'],'Pm');
-        Rm    = load_data([file_TN,'.mat'],'Rm');
-        Pm_sample = Pm(~isnan(Pm));
+        P_sample = P(~isnan(P));
         pressure_scale_to_pa = 1;
         Pressure_gradient_unit = 'Pa';
-        if ~isempty(Pm_sample) && nanmean(abs(Pm_sample(:)))<2000
+        if ~isempty(P_sample) && nanmean(abs(P_sample(:)))<2000
             pressure_scale_to_pa = 100;
             Pressure_gradient_unit = 'converted_hPa_to_Pa';
-            Pm = Pm*pressure_scale_to_pa;
         end
-        Umagf = (vm.^2)./r + F.*vm - 1./Rm.*dVdR(Pm,dr);
-        clear vm F Pm Rm
+        % Compute -rho^{-1} dp/dr before azimuthal averaging.  Replacing
+        % this by -<rho>^{-1} d<p>/dr omits a density--pressure-gradient
+        % covariance and is not the exact mean radial pressure force.
+        rho   = load_data([file_TN,'.mat'],'rho');
+        Upressure = -1./rho.*dVdR(P*pressure_scale_to_pa,dr);
+        Umagf = (vm.^2)./r + F.*vm;
+        clear vm F rho
         
         % Eddy agradient force (Ueagf)
         disp(['Calculating... : Ueagf'])
         vp    = load_data([file_TN,'.mat'],'vp');
-        Pp    = load_data([file_TN,'.mat'],'Pp');
-        rho   = load_data([file_TN,'.mat'],'rho');
-        Pp = Pp*pressure_scale_to_pa;
-        Ueagf = (vp.^2)./r - 1./rho.*dVdR(Pp,dr);
-        clear vp Pp rho
+        Ueagf = (vp.^2)./r;
+        clear vp
         
         % Combined mean radial and vertical diffusive tendency (Ud)
         disp(['Calculating... : Ud'])
@@ -243,6 +242,8 @@ for T = T_beg:T_frq:T_end
         Umv    = squeeze(nanmean(Umv,2));
         Uev    = squeeze(nanmean(Uev,2));
         Umagf  = squeeze(nanmean(Umagf,2));
+        Upressure = squeeze(nanmean(Upressure,2));
+        Umagf  = Umagf + Upressure;
         Ueagf  = squeeze(nanmean(Ueagf,2));
         Ud     = squeeze(nanmean(Ud,2));
         Udh    = squeeze(nanmean(Udh,2));
@@ -293,14 +294,14 @@ for T = T_beg:T_frq:T_end
         'Tendency_scheme','Pressure_gradient_unit','Subgrid_momentum_mode','Subgrid_momentum_source',...
         'TIME','z','P','u','v',...
         'Vt','Vmzeta','Vmv','Vezeta','Vev','Vd','Vdr','Vdz','Vpbl',...
-        'Ut','Umr','Ueh','Umv','Uev','Umagf','Ueagf','Ud','Udh','Udz','Upbl',...
+        'Ut','Umr','Ueh','Umv','Uev','Umagf','Upressure','Ueagf','Ud','Udh','Udz','Upbl',...
         'V_subgrid','U_subgrid','Sum_V','Residual_V','Sum_U','Residual_U',...
         'lon_TC','lat_TC','slp_TC','swd_TC')
         
         clear R PHI dR dPhi r dr
         clear TIME dt Tendency_scheme Pressure_gradient_unit lon lat z P f u v
         clear Vt Vmzeta Vmv Vezeta Vev Vd Vdr Vdz Vpbl V_subgrid
-        clear Ut Umr Ueh Umv Uev Umagf Ueagf Ud Udh Udz Upbl U_subgrid
+        clear Ut Umr Ueh Umv Uev Umagf Upressure Ueagf Ud Udh Udz Upbl U_subgrid
         clear Sum_V Residual_V Sum_U Residual_U
         clear lon_TC lat_TC slp_TC swd_TC
 
