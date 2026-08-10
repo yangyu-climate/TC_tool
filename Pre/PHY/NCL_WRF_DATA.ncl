@@ -402,7 +402,10 @@ do i = 0,dimsizes(all_files)-1,1
   va = wrf_user_getvar(a,"va",time)
   cosalpha = a->COSALPHA(0,:,:)
   sinalpha = a->SINALPHA(0,:,:)
-  var   = ua*cosalpha - va*sinalpha
+  nDim = dimsizes(dimsizes(ua))
+  cosalpha_wind = conform_dims(dimsizes(ua),cosalpha,(/nDim-2,nDim-1/))
+  sinalpha_wind = conform_dims(dimsizes(ua),sinalpha,(/nDim-2,nDim-1/))
+  var   = ua*cosalpha_wind - va*sinalpha_wind
   var@description  = "Earth-relative eastward wind on mass points"
   var@units        = "m s-1"
   var@components    = "eastward"
@@ -413,7 +416,7 @@ do i = 0,dimsizes(all_files)-1,1
 ;----------------------------------------------------------------------------
 ; Earth-relative northward wind
 ;----------------------------------------------------------------------------
-  var   = ua*sinalpha + va*cosalpha
+  var   = ua*sinalpha_wind + va*cosalpha_wind
   var@description  = "Earth-relative northward wind on mass points"
   var@units        = "m s-1"
   var@components    = "northward"
@@ -425,6 +428,8 @@ do i = 0,dimsizes(all_files)-1,1
   delete(va)
   delete(cosalpha)
   delete(sinalpha)
+  delete(cosalpha_wind)
+  delete(sinalpha_wind)
 ;----------------------------------------------------------------------------
 ; W Wind
 ;----------------------------------------------------------------------------
@@ -452,7 +457,10 @@ do i = 0,dimsizes(all_files)-1,1
   v10 = wrf_user_getvar(a,"V10",time)
   cosalpha = a->COSALPHA(0,:,:)
   sinalpha = a->SINALPHA(0,:,:)
-  var   = u10*cosalpha - v10*sinalpha
+  nDim = dimsizes(dimsizes(u10))
+  cosalpha_wind = conform_dims(dimsizes(u10),cosalpha,(/nDim-2,nDim-1/))
+  sinalpha_wind = conform_dims(dimsizes(u10),sinalpha,(/nDim-2,nDim-1/))
+  var   = u10*cosalpha_wind - v10*sinalpha_wind
   var@description = "Earth-relative 10m eastward wind"
   var@components = "eastward"
   fileO = fileSafe+"_U10.nc"
@@ -462,7 +470,7 @@ do i = 0,dimsizes(all_files)-1,1
 ;----------------------------------------------------------------------------
 ; Earth-relative 10m northward wind
 ;----------------------------------------------------------------------------
-  var   = u10*sinalpha + v10*cosalpha
+  var   = u10*sinalpha_wind + v10*cosalpha_wind
   var@description = "Earth-relative 10m northward wind"
   var@components = "northward"
   fileO = fileSafe+"_V10.nc"
@@ -473,6 +481,8 @@ do i = 0,dimsizes(all_files)-1,1
   delete(v10)
   delete(cosalpha)
   delete(sinalpha)
+  delete(cosalpha_wind)
+  delete(sinalpha_wind)
 ;----------------------------------------------------------------------------
 
 end do

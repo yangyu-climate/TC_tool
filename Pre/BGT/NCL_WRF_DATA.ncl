@@ -424,7 +424,10 @@ do i = 0,dimsizes(all_files)-1,1
   va = wrf_user_getvar(a,"va",time)
   cosalpha = a->COSALPHA(0,:,:)
   sinalpha = a->SINALPHA(0,:,:)
-  var   = ua*cosalpha - va*sinalpha
+  nDim = dimsizes(dimsizes(ua))
+  cosalpha_wind = conform_dims(dimsizes(ua),cosalpha,(/nDim-2,nDim-1/))
+  sinalpha_wind = conform_dims(dimsizes(ua),sinalpha,(/nDim-2,nDim-1/))
+  var   = ua*cosalpha_wind - va*sinalpha_wind
   var@description  = "Earth-relative eastward wind on mass points"
   var@units        = "m s-1"
   var@components    = "eastward"
@@ -435,7 +438,7 @@ do i = 0,dimsizes(all_files)-1,1
 ;----------------------------------------------------------------------------
 ; Earth-relative northward wind
 ;----------------------------------------------------------------------------
-  var   = ua*sinalpha + va*cosalpha
+  var   = ua*sinalpha_wind + va*cosalpha_wind
   var@description  = "Earth-relative northward wind on mass points"
   var@units        = "m s-1"
   var@components    = "northward"
@@ -447,6 +450,8 @@ do i = 0,dimsizes(all_files)-1,1
   delete(va)
   delete(cosalpha)
   delete(sinalpha)
+  delete(cosalpha_wind)
+  delete(sinalpha_wind)
 ;----------------------------------------------------------------------------
 ; W Wind
 ;----------------------------------------------------------------------------
@@ -479,7 +484,10 @@ do i = 0,dimsizes(all_files)-1,1
   rvb = wrf_user_getvar(a,"RVBLTEN",time)
   cosalpha = a->COSALPHA(0,:,:)
   sinalpha = a->SINALPHA(0,:,:)
-  var   = rub*cosalpha - rvb*sinalpha
+  nDim = dimsizes(dimsizes(rub))
+  cosalpha_wind = conform_dims(dimsizes(rub),cosalpha,(/nDim-2,nDim-1/))
+  sinalpha_wind = conform_dims(dimsizes(rub),sinalpha,(/nDim-2,nDim-1/))
+  var   = rub*cosalpha_wind - rvb*sinalpha_wind
   var@description  = "Earth-relative eastward wind tendency due to PBL parametrization"
   var@units        = "m s-2"
   var@components    = "eastward"
@@ -490,7 +498,7 @@ do i = 0,dimsizes(all_files)-1,1
 ;----------------------------------------------------------------------------
 ; Earth-relative northward wind tendency due to PBL parametrization
 ;----------------------------------------------------------------------------
-  var   = rub*sinalpha + rvb*cosalpha
+  var   = rub*sinalpha_wind + rvb*cosalpha_wind
   var@description  = "Earth-relative northward wind tendency due to PBL parametrization"
   var@units        = "m s-2"
   var@components    = "northward"
@@ -502,6 +510,8 @@ do i = 0,dimsizes(all_files)-1,1
   delete(rvb)
   delete(cosalpha)
   delete(sinalpha)
+  delete(cosalpha_wind)
+  delete(sinalpha_wind)
 ;----------------------------------------------------------------------------
 
 ; Theta Budegt
