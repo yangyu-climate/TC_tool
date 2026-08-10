@@ -1,5 +1,10 @@
 function [distance_km,x_km,y_km] = tc_great_circle_xy(lat,lon,lat0,lon0)
 % Great-circle distance and local east/north components from (lat0,lon0).
+% Return double coordinates so they can be passed directly to griddata.
+lat = double(lat);
+lon = double(lon);
+lat0 = double(lat0);
+lon0 = double(lon0);
 R_earth_km = 6371.0;
 lat1 = deg2rad(lat0); lat2 = deg2rad(lat);
 dlon = deg2rad(mod(lon-lon0+180,360)-180);
