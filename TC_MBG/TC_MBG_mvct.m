@@ -47,10 +47,8 @@ for T = T_beg:T_frq:T_end
     [year,month,day,hour,minu,seco] = date2num(TIME);
     [year_num,month_num,day_num,...
      hour_num,minu_num,seco_num]    = date2str(TIME);
-    T_name    = [year_num,'-',month_num,'-',day_num,'_',...
-                 hour_num,':',minu_num,':',seco_num];
-    file_name = [Head_nam,'*',T_name,'*_time.nc'];
-    filename  = dir([Data_dir,'/',file_name]);
+    T_name    = tc_time_name(TIME);
+    [filename,~] = tc_find_time_file(Data_dir,Head_nam,TIME,'*_time.nc');
     if ~isempty(filename)
         TC_loc = tc_match_track_time(TC_time,TIME,0.5*T_frq,TC_diagnostic_valid);
         if ~isempty(TC_loc)
@@ -69,6 +67,8 @@ for T = T_beg:T_frq:T_end
         disp(['loading...'])	
         file_name = filename.name(1:end-8);
         file_name = [Data_dir,'/',file_name];
+        tc_assert_earth_relative_wind([file_name,'_u.nc'],[file_name,'_v.nc'])
+        tc_assert_earth_relative_wind([file_name,'_RUBLTEN.nc'],[file_name,'_RVBLTEN.nc'])
         % Basic Variables
         lon   = ncload_2D([file_name,'_lon.nc'] ,'lon');
         lat   = ncload_2D([file_name,'_lat.nc'] ,'lat');
@@ -94,9 +94,14 @@ for T = T_beg:T_frq:T_end
         [dist,X,Y] = tc_great_circle_xy(lat,lon,lat_TC,lon_TC);
         x = X;
         y = Y;
-        mask(find(dist<=Radius))=1;
+        mask(dist<=Radius)=1;
 
         if IF_Zfix
+          fixed_size = [numel(z_hight),size(lon,1),size(lon,2)];
+          zS = repmat(reshape(z_hight,[],1,1),1,size(lon,1),size(lon,2));
+          PS = NaN(fixed_size); uS = PS; vS = PS; wS = PS;
+          khS = PS; kvS = PS; RUBLTENS = PS; RVBLTENS = PS;
+          avoS = PS; rhoS = PS;
           for i=1:size(x,1)
             for j = 1:size(y,2) 
               [zq,iq]        = unique_sorted_height(squeeze(z(:,i,j)));
@@ -127,17 +132,8 @@ for T = T_beg:T_frq:T_end
           clear zS  PS  uS  vS  wS  khS  kvS  RUBLTENS RVBLTENS avoS  rhoS
         end
       
-        for i=1:size(x,1)
-          for j=1:size(x,2)
-            if x(i,j)~=0||y(i,j)~=0
-              phi(i,j) = get_angle(x(i,j),y(i,j))/180*pi;
-              r(i,j)   = sqrt(x(i,j)^2+y(i,j)^2);
-            else
-              phi(i,j)     = 0;
-              r(i,j)       = 0;
-            end
-          end 
-        end
+        phi = mod(atan2(y,x),2*pi);
+        r   = hypot(x,y);
 
         % Rectangular to Cylindrical
         uc    = u;
@@ -149,6 +145,9 @@ for T = T_beg:T_frq:T_end
         lon   = Car2Cly(r,phi,lon,X,Y);
         lat   = Car2Cly(r,phi,lat,X,Y);
         f     = Car2Cly(r,phi,f  ,X,Y);
+        output_size = [size(z,1),numel(PHI),numel(R)];
+        zS = NaN(output_size); PS = zS; uS = zS; vS = zS; wS = zS;
+        khS = zS; kvS = zS; UpblS = zS; VpblS = zS; avoS = zS; rhoS = zS;
         for k=1:size(z,1)
             zS(k,:,:)     = Car2Cly(r,phi,squeeze(z(k,:,:))  ,X,Y);
             PS(k,:,:)     = Car2Cly(r,phi,squeeze(P(k,:,:))  ,X,Y);

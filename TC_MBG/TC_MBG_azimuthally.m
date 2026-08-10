@@ -21,11 +21,7 @@ if   ~isempty(filename)
         file_name = filename(N).name;
         fileN     = [Data_dir,'/',file_name];
         TIME      = load_data(fileN,'TIME');
-        [year,month,day,hour,minu,seco] = date2num(TIME);
-        [year_num,month_num,day_num,...
-         hour_num,minu_num,seco_num]    = date2str(TIME);
-        T_name    = [year_num,'-',month_num,'-',day_num,'_',...
-                     hour_num,':',minu_num,':',seco_num];
+        T_name    = tc_time_name(TIME);
         disp([' '])
         disp(['Date: ',T_name])
         disp(['File: ',fileN])
@@ -56,37 +52,32 @@ if   ~isempty(filename)
         swd_TC = load_data(fileN,'swd_TC');
         
         dr = dR*1000;
-        for k=1:size(z,1)
-            F(k,:,:) = f;
-            for j=1:size(z,2)
-                r(k,j,:) = R*1000;
-            end
-        end
+        F = repmat(reshape(f,1,size(f,1),size(f,2)),size(z,1),1,1);
+        r = repmat(reshape(R*1000,1,1,[]),size(z,1),size(z,2),1);
         r(r==0) = NaN;
         vo = avo-F;
         
-        Trp =   kh.*(dVdPhi(u,dPhi)./r + r.*dVdR(v./r,dr));
+        % At the axis v/r has a finite regular-flow limit.  Leaving the
+        % axis as NaN before dVdR contaminates the first non-zero radius
+        % through the one-sided stencil, so extend it from that first ring.
+        v_over_r = v./r;
+        if size(r,3)>1
+            v_over_r(:,:,1) = v_over_r(:,:,2);
+        end
+        Trp =   kh.*(dVdPhi(u,dPhi)./r + r.*dVdR(v_over_r,dr));
         Tpz =   kv.*(dVdPhi(w,dPhi)./r + dVdZ(v,z));
         Trr = 2*kh.*(dVdR(u,dr));
         Tpp = 2*kh.*(dVdPhi(v,dPhi)./r + u./r);
         Trz =   kv.*(dVdZ(u,z)         + dVdR(w,dr));
         
         disp(['Calculating...'])
-        for j=1:size(z,2)
-            um(:,j,:)     = nanmean(u,2);
-            vm(:,j,:)     = nanmean(v,2);
-            wm(:,j,:)     = nanmean(w,2);
-            Om(:,j,:)     = nanmean(vo,2);
-            Rm(:,j,:)     = nanmean(rho,2);
-            Pm(:,j,:)     = nanmean(p,2);
-            TrpM(:,j,:)   = nanmean(Trp,2);
-            TpzM(:,j,:)   = nanmean(Tpz,2);
-            TrrM(:,j,:)   = nanmean(Trr,2);
-            TppM(:,j,:)   = nanmean(Tpp,2);
-            TrzM(:,j,:)   = nanmean(Trz,2);
-            UpblM(:,j,:)  = nanmean(Upbl,2);
-            VpblM(:,j,:)  = nanmean(Vpbl,2);
-        end
+        um    = mean(u,2,'omitnan');     vm    = mean(v,2,'omitnan');
+        wm    = mean(w,2,'omitnan');     Om    = mean(vo,2,'omitnan');
+        Rm    = mean(rho,2,'omitnan');   Pm    = mean(p,2,'omitnan');
+        TrpM  = mean(Trp,2,'omitnan');   TpzM  = mean(Tpz,2,'omitnan');
+        TrrM  = mean(Trr,2,'omitnan');   TppM  = mean(Tpp,2,'omitnan');
+        TrzM  = mean(Trz,2,'omitnan');
+        UpblM = mean(Upbl,2,'omitnan');  VpblM = mean(Vpbl,2,'omitnan');
         up    = u    - um;
         vp    = v    - vm;
         wp    = w    - wm;

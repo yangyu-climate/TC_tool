@@ -19,25 +19,27 @@ Time_frq = cfg.Time_frq;
 Tendency_frq = cfg.Tendency_frq;
 Use_thetaE = cfg.Use_thetaE;
 Use_khkv_friction = cfg.Use_khkv_friction;
+Omega = cfg.Omega;
 
 T_beg = datenum(Time_beg);
 T_end = datenum(Time_end);
-T_frq = Time_frq/60/24;
-del_T = Tendency_frq/60/24;
 D_to_S = 24*60*60;
+assert(isscalar(Tendency_frq) && isfinite(Tendency_frq) && Tendency_frq>0,...
+    'TC_PVBG:TendencyFrequency','cfg.Tendency_frq must be a positive number of minutes.')
+Tendency_step_day = Tendency_frq/(24*60);
 
-for T = T_beg:T_frq:T_end
-    TIME = T;
-    [year_num,month_num,day_num,hour_num,minu_num,seco_num] = date2str(TIME);
-    T_name = [year_num,'-',month_num,'-',day_num,'_',...
-              hour_num,':',minu_num,':',seco_num];
-    file_name = [Head_nam,'*',T_name,'.mat'];
-    filename = dir([Data_dir,'/',file_name]);
-    if ~isempty(filename)
+filename = dir(fullfile(Data_dir,[Head_nam,'*.mat']));
+[~,order] = sort({filename.name});
+filename = filename(order);
+for file_index = 1:numel(filename)
+    file_name = filename(file_index).name(1:end-4);
+    file_TN = fullfile(Data_dir,file_name);
+    TIME = load_data([file_TN,'.mat'],'TIME');
+    if TIME>=T_beg && TIME<=T_end
+        source_T_name = tc_time_name(TIME,contains(filename(file_index).name,':'));
+        T_name = tc_time_name(TIME);
         disp([' '])
         disp(['Date: ',T_name])
-        file_name = filename.name(1:end-4);
-        file_TN = [Data_dir,'/',file_name];
 
         R          = load_data([file_TN,'.mat'],'R');
         PHI        = load_data([file_TN,'.mat'],'PHI');
@@ -46,6 +48,7 @@ for T = T_beg:T_frq:T_end
         z          = load_data([file_TN,'.mat'],'z');
         r          = load_data([file_TN,'.mat'],'r');
         P          = load_data([file_TN,'.mat'],'P');
+        lat        = load_data([file_TN,'.mat'],'lat');
         u          = load_data([file_TN,'.mat'],'u');
         v          = load_data([file_TN,'.mat'],'v');
         w          = load_data([file_TN,'.mat'],'w');
@@ -63,37 +66,43 @@ for T = T_beg:T_frq:T_end
         theta      = load_data([file_TN,'.mat'],'theta');
         thetaE     = load_data([file_TN,'.mat'],'thetaE');
         H_DIABATIC = load_data([file_TN,'.mat'],'H_DIABATIC');
+        heating_components_available = load_data([file_TN,'.mat'],'heating_components_available');
         lon_TC     = load_data([file_TN,'.mat'],'lon_TC');
         lat_TC     = load_data([file_TN,'.mat'],'lat_TC');
         slp_TC     = load_data([file_TN,'.mat'],'slp_TC');
         swd_TC     = load_data([file_TN,'.mat'],'swd_TC');
 
         dr = dR*1000;
-        h = del_T*D_to_S;
         if Use_thetaE
             b = thetaE;
             PV = pv_thetaE;
             pv_name = 'thetaE';
+            PV_budget_interpretation = ['Generalized Ertel PV of diagnostic equivalent potential temperature. ',...
+                'PV_therm uses diagnosed D(thetaE)/Dt and is not a uniquely process-separated moist-PV heating budget.'];
         else
             b = theta;
             PV = pv_theta;
             pv_name = 'theta';
+            PV_budget_interpretation = ['Dry-theta Ertel PV budget. PV_therm uses the exported ',...
+                'theta-tendency sum; its interpretation remains limited by available WRF tendencies.'];
         end
 
-        [PV_0 ,b_0 ,has_0 ] = load_pv_state(file_TN,T_name,TIME, 0,del_T,R,PHI,Use_thetaE);
-        [PV_B ,b_B ,has_B ] = load_pv_state(file_TN,T_name,TIME,-1,del_T,R,PHI,Use_thetaE);
-        [PV_F ,b_F ,has_F ] = load_pv_state(file_TN,T_name,TIME, 1,del_T,R,PHI,Use_thetaE);
-        [PV_B2,b_B2,has_B2] = load_pv_state(file_TN,T_name,TIME,-2,del_T,R,PHI,Use_thetaE);
-        [PV_F2,b_F2,has_F2] = load_pv_state(file_TN,T_name,TIME, 2,del_T,R,PHI,Use_thetaE);
+        [PV_0 ,b_0 ,has_0 ,time_0 ] = load_pv_state(file_TN,source_T_name,TIME, 0,Tendency_step_day,R,PHI,Use_thetaE);
+        [PV_B ,b_B ,has_B ,time_B ] = load_pv_state(file_TN,source_T_name,TIME,-1,Tendency_step_day,R,PHI,Use_thetaE);
+        [PV_F ,b_F ,has_F ,time_F ] = load_pv_state(file_TN,source_T_name,TIME, 1,Tendency_step_day,R,PHI,Use_thetaE);
+        [PV_B2,b_B2,has_B2,time_B2] = load_pv_state(file_TN,source_T_name,TIME,-2,Tendency_step_day,R,PHI,Use_thetaE);
+        [PV_F2,b_F2,has_F2,time_F2] = load_pv_state(file_TN,source_T_name,TIME, 2,Tendency_step_day,R,PHI,Use_thetaE);
 
         [PV_tendency,b_tendency,Tendency_scheme] = local_tendency(PV_0,PV_B,PV_F,PV_B2,PV_F2,...
                                                                   b_0,b_B,b_F,b_B2,b_F2,...
-                                                                  has_0,has_B,has_F,has_B2,has_F2,h);
+                                                                  has_0,has_B,has_F,has_B2,has_F2,...
+                                                                  time_0,time_B,time_F,time_B2,time_F2,D_to_S);
         if isempty(PV_tendency)
             disp(['Skip tendency calculation: no neighboring file for ',T_name])
             continue
         end
-        dt = h;
+        dt = NaN;
+        if has_B && has_F, dt = 0.5*(time_F-time_B)*D_to_S; end
 
         r_safe = r;
         r_safe(r_safe==0) = NaN;
@@ -107,7 +116,7 @@ for T = T_beg:T_frq:T_end
         PV_azimuth_adv  = -v.*PV_phi;
         PV_vertical_adv = -w.*PV_z;
 
-        [zeta_r,zeta_phi,zeta_z] = absolute_vorticity_cyl(u,v,w,avo,r_safe,z,dr,dPhi);
+        [zeta_r,zeta_phi,zeta_z] = absolute_vorticity_cyl(u,v,w,avo,r_safe,z,dr,dPhi,lat,PHI,Omega);
         PV_solenoidal = dot_cross_grad(rho_r,rho_phi,rho_z,P_r,P_phi,P_z,b_r,b_phi,b_z)./(rho.^3);
 
         if Use_thetaE
@@ -137,39 +146,39 @@ for T = T_beg:T_frq:T_end
                  PV_solenoidal + PV_therm + PV_friction;
         PV_residual = PV_tendency - PV_sum;
 
-        z2       = squeeze(nanmean(z,2));
-        r2       = squeeze(nanmean(r,2));
-        P2       = squeeze(nanmean(P,2));
-        rho2     = squeeze(nanmean(rho,2));
-        pvo_wrf2 = squeeze(nanmean(pvo_wrf,2));
-        pv_theta2  = squeeze(nanmean(pv_theta,2));
-        pv_thetaE2 = squeeze(nanmean(pv_thetaE,2));
+        z2       = squeeze(mean(z,2,'omitnan'));
+        r2       = squeeze(mean(r,2,'omitnan'));
+        P2       = squeeze(mean(P,2,'omitnan'));
+        rho2     = squeeze(mean(rho,2,'omitnan'));
+        pvo_wrf2 = squeeze(mean(pvo_wrf,2,'omitnan'));
+        pv_theta2  = squeeze(mean(pv_theta,2,'omitnan'));
+        pv_thetaE2 = squeeze(mean(pv_thetaE,2,'omitnan'));
         pv_diff2   = pv_thetaE2 - pv_theta2;
-        pv_theta_pvu2  = squeeze(nanmean(pv_theta_pvu,2));
-        pv_thetaE_pvu2 = squeeze(nanmean(pv_thetaE_pvu,2));
+        pv_theta_pvu2  = squeeze(mean(pv_theta_pvu,2,'omitnan'));
+        pv_thetaE_pvu2 = squeeze(mean(pv_thetaE_pvu,2,'omitnan'));
         pv_diff_pvu2   = pv_thetaE_pvu2 - pv_theta_pvu2;
-        b2       = squeeze(nanmean(b,2));
-        theta2   = squeeze(nanmean(theta,2));
-        thetaE2  = squeeze(nanmean(thetaE,2));
-        H2       = squeeze(nanmean(H_DIABATIC,2));
-        bdot2    = squeeze(nanmean(b_dot,2));
-        u_mean   = squeeze(nanmean(u,2));
-        v_mean   = squeeze(nanmean(v,2));
-        w_mean   = squeeze(nanmean(w,2));
-        Upbl_mean = squeeze(nanmean(Upbl,2));
-        Vpbl_mean = squeeze(nanmean(Vpbl,2));
+        b2       = squeeze(mean(b,2,'omitnan'));
+        theta2   = squeeze(mean(theta,2,'omitnan'));
+        thetaE2  = squeeze(mean(thetaE,2,'omitnan'));
+        H2       = squeeze(mean(H_DIABATIC,2,'omitnan'));
+        bdot2    = squeeze(mean(b_dot,2,'omitnan'));
+        u_mean   = squeeze(mean(u,2,'omitnan'));
+        v_mean   = squeeze(mean(v,2,'omitnan'));
+        w_mean   = squeeze(mean(w,2,'omitnan'));
+        Upbl_mean = squeeze(mean(Upbl,2,'omitnan'));
+        Vpbl_mean = squeeze(mean(Vpbl,2,'omitnan'));
 
-        PV_tendency     = squeeze(nanmean(PV_tendency,2));
-        PV_radial_adv   = squeeze(nanmean(PV_radial_adv,2));
-        PV_azimuth_adv  = squeeze(nanmean(PV_azimuth_adv,2));
-        PV_vertical_adv = squeeze(nanmean(PV_vertical_adv,2));
-        PV_solenoidal   = squeeze(nanmean(PV_solenoidal,2));
-        PV_therm        = squeeze(nanmean(PV_therm,2));
-        PV_friction_pbl = squeeze(nanmean(PV_friction_pbl,2));
-        PV_friction_khkv = squeeze(nanmean(PV_friction_khkv,2));
-        PV_friction     = squeeze(nanmean(PV_friction,2));
-        PV_sum          = squeeze(nanmean(PV_sum,2));
-        PV_residual     = squeeze(nanmean(PV_residual,2));
+        PV_tendency     = squeeze(mean(PV_tendency,2,'omitnan'));
+        PV_radial_adv   = squeeze(mean(PV_radial_adv,2,'omitnan'));
+        PV_azimuth_adv  = squeeze(mean(PV_azimuth_adv,2,'omitnan'));
+        PV_vertical_adv = squeeze(mean(PV_vertical_adv,2,'omitnan'));
+        PV_solenoidal   = squeeze(mean(PV_solenoidal,2,'omitnan'));
+        PV_therm        = squeeze(mean(PV_therm,2,'omitnan'));
+        PV_friction_pbl = squeeze(mean(PV_friction_pbl,2,'omitnan'));
+        PV_friction_khkv = squeeze(mean(PV_friction_khkv,2,'omitnan'));
+        PV_friction     = squeeze(mean(PV_friction,2,'omitnan'));
+        PV_sum          = squeeze(mean(PV_sum,2,'omitnan'));
+        PV_residual     = squeeze(mean(PV_residual,2,'omitnan'));
 
         z = z2;
         r = r2;
@@ -191,8 +200,8 @@ for T = T_beg:T_frq:T_end
 
         Save_file = [Save_nam,'_',T_name,'.mat'];
         save([Save_dir,'/',Save_file],...
-            'R','PHI','dR','dPhi','dr','dt','Use_thetaE','Use_khkv_friction','pv_name',...
-            'Tendency_scheme','b_dot_source','Friction_note',...
+            'R','PHI','dR','dPhi','dr','dt','Use_thetaE','Use_khkv_friction','Omega','pv_name',...
+            'Tendency_scheme','b_dot_source','Friction_note','PV_budget_interpretation','heating_components_available',...
             'TIME','z','r','P','P_pa','rho','u_mean','v_mean','w_mean','Upbl_mean','Vpbl_mean',...
             'pvo_wrf','pv_theta','pv_thetaE','pv_diff','pv_theta_pvu','pv_thetaE_pvu','pv_diff_pvu',...
             'b','theta','thetaE','H_DIABATIC','b_dot',...
@@ -201,9 +210,9 @@ for T = T_beg:T_frq:T_end
             'lon_TC','lat_TC','slp_TC','swd_TC')
 
         clear R PHI dR dPhi dr dt Tendency_scheme
-        clear TIME z r P P_pa rho rho2 u v w avo kh kv Upbl Vpbl pvo_wrf pv_theta pv_thetaE pv_diff
+        clear TIME lat z r P P_pa rho rho2 u v w avo kh kv Upbl Vpbl pvo_wrf pv_theta pv_thetaE pv_diff
         clear pv_theta_pvu pv_thetaE_pvu pv_diff_pvu
-        clear theta thetaE H_DIABATIC b b_dot
+        clear theta thetaE H_DIABATIC heating_components_available b b_dot
         clear PV_tendency PV_radial_adv PV_azimuth_adv PV_vertical_adv
         clear PV_solenoidal PV_therm PV_friction_pbl PV_friction_khkv PV_friction PV_sum PV_residual
         clear lon_TC lat_TC slp_TC swd_TC
@@ -212,65 +221,87 @@ end
 
 function [tend,btend,scheme] = local_tendency(PV_0,PV_B,PV_F,PV_B2,PV_F2,...
                                               b_0,b_B,b_F,b_B2,b_F2,...
-                                              has_0,has_B,has_F,has_B2,has_F2,h)
+                                              has_0,has_B,has_F,has_B2,has_F2,...
+                                              time_0,time_B,time_F,time_B2,time_F2,day_to_second)
 
 tend = [];
 btend = [];
 scheme = 'none';
-if has_B2 && has_B && has_F && has_F2
+if has_B2 && has_B && has_F && has_F2 && is_uniform_time_grid([time_B2 time_B time_0 time_F time_F2])
+    h = (time_F-time_0)*day_to_second;
     tend  = (-PV_F2 + 8*PV_F - 8*PV_B + PV_B2)/(12*h);
     btend = (-b_F2  + 8*b_F  - 8*b_B  + b_B2 )/(12*h);
     scheme = 'fourth_order_centered';
-elseif has_B && has_F
-    tend  = (PV_F-PV_B)/(2*h);
-    btend = (b_F-b_B)/(2*h);
-    scheme = 'second_order_centered';
+elseif has_0 && has_B && has_F
+    tend  = three_point_time_derivative(PV_B,time_B,PV_0,time_0,PV_F,time_F,day_to_second);
+    btend = three_point_time_derivative(b_B,time_B,b_0,time_0,b_F,time_F,day_to_second);
+    scheme = 'second_order_centered_variable_step';
 elseif has_0 && has_F && has_F2
-    tend  = (-3*PV_0 + 4*PV_F - PV_F2)/(2*h);
-    btend = (-3*b_0  + 4*b_F  - b_F2 )/(2*h);
-    scheme = 'second_order_forward';
+    tend  = three_point_time_derivative(PV_0,time_0,PV_F,time_F,PV_F2,time_F2,day_to_second);
+    btend = three_point_time_derivative(b_0,time_0,b_F,time_F,b_F2,time_F2,day_to_second);
+    scheme = 'second_order_forward_variable_step';
 elseif has_0 && has_B && has_B2
-    tend  = (3*PV_0 - 4*PV_B + PV_B2)/(2*h);
-    btend = (3*b_0  - 4*b_B  + b_B2 )/(2*h);
-    scheme = 'second_order_backward';
+    tend  = three_point_time_derivative(PV_B2,time_B2,PV_B,time_B,PV_0,time_0,day_to_second);
+    btend = three_point_time_derivative(b_B2,time_B2,b_B,time_B,b_0,time_0,day_to_second);
+    scheme = 'second_order_backward_variable_step';
 elseif has_0 && has_F
+    h = (time_F-time_0)*day_to_second;
     tend  = (PV_F-PV_0)/h;
     btend = (b_F-b_0)/h;
     scheme = 'first_order_forward';
 elseif has_0 && has_B
+    h = (time_0-time_B)*day_to_second;
     tend  = (PV_0-PV_B)/h;
     btend = (b_0-b_B)/h;
     scheme = 'first_order_backward';
 end
 end
 
-function [PV,b,has_file] = load_pv_state(file_name,T_name,TIME,offset,del_T,R,PHI,Use_thetaE)
+function [PV,b,has_file,state_time] = load_pv_state(file_name,T_name,TIME,offset,tendency_step_day,R,PHI,Use_thetaE)
 
-if offset==0
-    file_t = file_name;
-else
-    [year_num,month_num,day_num,hour_num,minu_num,seco_num] = date2str(TIME+offset*del_T);
-    name_t = [year_num,'-',month_num,'-',day_num,'_',hour_num,':',minu_num,':',seco_num];
-    file_t = [file_name(1:end-length(T_name)),name_t];
+% Select the configured tendency stencil by saved time.  Do not silently use
+% the next file when an output is missing or has a different cadence.
+prefix = file_name(1:end-length(T_name));
+persistent cached_prefix cached_entries cached_times
+if isempty(cached_prefix) || ~strcmp(cached_prefix,prefix)
+    cached_entries = dir([prefix,'*.mat']);
+    cached_times = NaN(size(cached_entries));
+    for k = 1:numel(cached_entries)
+        cached_times(k) = load_data(fullfile(cached_entries(k).folder,cached_entries(k).name),'TIME');
+    end
+    [cached_times,order] = sort(cached_times);
+    cached_entries = cached_entries(order);
+    cached_prefix = prefix;
 end
-
-has_file = ~isempty(dir([file_t,'.mat']));
+entries = cached_entries;
+state_times = cached_times;
+[time_error,~] = min(abs(state_times-TIME));
+if isempty(state_times) || ~isfinite(time_error) || time_error>0.5/86400
+    error('TC_PVBG:TendencyTime','Unable to locate the current state by its saved timestamp.')
+end
+target_time = TIME + offset*tendency_step_day;
+[time_error,target_index] = min(abs(state_times-target_time));
+has_file = ~isempty(target_index) && isfinite(time_error) && time_error<=0.5/86400;
 if ~has_file
+    file_t = '';
     PV = [];
     b = [];
+    state_time = NaN;
     return
 end
+file_t = fullfile(entries(target_index).folder,entries(target_index).name);
 
-R_t   = load_data([file_t,'.mat'],'R');
-PHI_t = load_data([file_t,'.mat'],'PHI');
+R_t   = load_data(file_t,'R');
+PHI_t = load_data(file_t,'PHI');
+state_time = load_data(file_t,'TIME');
 if Use_thetaE
-    PV = load_data([file_t,'.mat'],'pv_thetaE');
-    b  = load_data([file_t,'.mat'],'thetaE');
+    PV = load_data(file_t,'pv_thetaE');
+    b  = load_data(file_t,'thetaE');
 else
-    PV = load_data([file_t,'.mat'],'pv_theta');
-    b  = load_data([file_t,'.mat'],'theta');
+    PV = load_data(file_t,'pv_theta');
+    b  = load_data(file_t,'theta');
 end
-if (nansum(abs(R_t-R))+nansum(abs(PHI_t-PHI)))>0
+if (sum(abs(R_t-R),'omitnan')+sum(abs(PHI_t-PHI),'omitnan'))>0
     [Rx_t,PHIx_t] = meshgrid(R_t,PHI_t);
     [Rx,PHIx] = meshgrid(R,PHI);
     PV_i = NaN(size(PV,1),length(PHI),length(R));
@@ -298,32 +329,40 @@ s = (ap.*bz - az.*bp).*cr + ...
     (ar.*bp - ap.*br).*cz;
 end
 
-function [zeta_r,zeta_phi,zeta_z] = absolute_vorticity_cyl(u,v,w,avo,r,z,dr,dPhi)
+function [zeta_r,zeta_phi,zeta_z] = absolute_vorticity_cyl(u,v,w,avo,r,z,dr,dPhi,lat,PHI,Omega)
 
-zeta_r   = 1./r.*d_phi_3d(w,dPhi) - d_z_3d(v,z);
-zeta_phi = d_z_3d(u,z) - d_dr_3d(w,dr);
-zeta_z   = avo;
+[zeta_r,zeta_phi,zeta_z] = tc_absolute_vorticity_cyl(u,v,w,avo,r,z,dr,dPhi,lat,PHI,Omega);
 end
 
 function [curlF_r,curlF_phi,curlF_z] = curl_horizontal_forcing_cyl(Fr,Fphi,r,z,dr,dPhi)
 
 curlF_r   = -d_z_3d(Fphi,z);
 curlF_phi = d_z_3d(Fr,z);
-curlF_z   = 1./r.*d_dr_3d(r.*Fphi,dr) - 1./r.*d_phi_3d(Fr,dPhi);
+rFphi = r.*Fphi;
+rFphi(:,:,1) = 0; % regular cylindrical limit prevents axis-NaN leakage
+curlF_z   = 1./r.*d_dr_3d(rFphi,dr) - 1./r.*d_phi_3d(Fr,dPhi);
 end
 
 function [Fr,Fphi] = khkv_momentum_forcing_cyl(u,v,w,kh,kv,r,z,dr,dPhi,rho)
 
-Trp = kh.*(d_phi_3d(u,dPhi)./r + r.*d_dr_3d(v./r,dr));
+v_over_r = v./r;
+if size(r,3)>1
+    v_over_r(:,:,1) = v_over_r(:,:,2);
+end
+Trp = kh.*(d_phi_3d(u,dPhi)./r + r.*d_dr_3d(v_over_r,dr));
 Tpz = kv.*(d_phi_3d(w,dPhi)./r + d_z_3d(v,z));
 Trr = 2*kh.*d_dr_3d(u,dr);
 Tpp = 2*kh.*(d_phi_3d(v,dPhi)./r + u./r);
 Trz = kv.*(d_z_3d(u,z) + d_dr_3d(w,dr));
 
-Fr = 1./(r.*rho).*d_dr_3d(r.*rho.*Trr,dr) + ...
+r_rho_Trr = r.*rho.*Trr;
+r_rho_Trr(:,:,1) = 0;
+r2_rho_Trp = (r.^2).*rho.*Trp;
+r2_rho_Trp(:,:,1) = 0;
+Fr = 1./(r.*rho).*d_dr_3d(r_rho_Trr,dr) + ...
      1./(r.*rho).*d_phi_3d(rho.*Trp,dPhi) + ...
      1./rho.*d_z_3d(rho.*Trz,z) - Tpp./r;
-Fphi = 1./((r.^2).*rho).*d_dr_3d((r.^2).*rho.*Trp,dr) + ...
+Fphi = 1./((r.^2).*rho).*d_dr_3d(r2_rho_Trp,dr) + ...
        1./(r.*rho).*d_phi_3d(rho.*Tpp,dPhi) + ...
        1./rho.*d_z_3d(rho.*Tpz,z);
 end
@@ -352,4 +391,20 @@ for i=1:size(v,2)
         dzv(:,i,j) = gradient(V)./gradient(Z);
     end
 end
+end
+
+function derivative = three_point_time_derivative(y1,t1,y2,t2,y3,t3,day_to_second)
+
+t1=t1*day_to_second; t2=t2*day_to_second; t3=t3*day_to_second;
+assert(t1<t2 && t2<t3,'TC_PVBG:TendencyTime','Tendency timestamps must be strictly increasing.')
+w1 = (t2-t3)/((t1-t2)*(t1-t3));
+w2 = (2*t2-t1-t3)/((t2-t1)*(t2-t3));
+w3 = (t2-t1)/((t3-t1)*(t3-t2));
+derivative = w1*y1 + w2*y2 + w3*y3;
+end
+
+function tf = is_uniform_time_grid(t)
+
+dt = diff(t)*86400;
+tf = all(isfinite(dt)) && all(dt>0) && max(abs(dt-dt(1))) <= max(1e-6,1e-8*dt(1));
 end

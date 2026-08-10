@@ -22,7 +22,7 @@ cfg.z_hight = [0:cfg.z_lowL:(cfg.z_low-cfg.z_lowL) cfg.z_low:cfg.z_level:cfg.z_l
 cfg.Input_dir  = '../Pre/BGT/DATA';
 cfg.Save_nam   = 'MBG';
 
-% Budget calculation
+% Budget calculation. Neighboring states must exist at t +/- n*Tendency_frq.
 cfg.calc.Tendency_frq = 15; % minute
 % One and only one representation of subgrid momentum forcing enters the
 % closure.  The direct WRF PBL tendency is the default; using kh/kv stresses

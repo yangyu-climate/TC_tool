@@ -13,8 +13,10 @@ dR         = cfg.dR;
 dN         = ceil(dR/resolution);
 TCR        = cfg.TCR;
 TWR        = cfg.TWR;
-TLM        = ceil(TCR/resolution);
-TLN        = ceil(TWR/resolution);
+% TC_center_CIM receives an odd full window width.  Converting a physical
+% radius directly used to halve the requested search radius internally.
+TLM        = 2*ceil(TCR/resolution)+1;
+TLN        = 2*ceil(TWR/resolution)+1;
 
 
 save_dir = [pwd,'/Data'];
@@ -35,12 +37,12 @@ if ~isempty(filename)
         
         fileN     = [Data_dir,'/',file_name,'_time.nc'];
         time      = ncread(fileN,'time')';
-        year      = str2num(time(1:4));
-        month     = str2num(time(6:7));
-        day       = str2num(time(9:10));
-        hour      = str2num(time(12:13));
-        minu      = str2num(time(15:16));
-        seco      = str2num(time(18:19));
+        year      = str2double(time(1:4));
+        month     = str2double(time(6:7));
+        day       = str2double(time(9:10));
+        hour      = str2double(time(12:13));
+        minu      = str2double(time(15:16));
+        seco      = str2double(time(18:19));
         T         = datenum([year,month,day,hour,minu,seco]);
         
         disp([' '])
@@ -77,7 +79,12 @@ if ~isempty(filename)
             tc_p(:) = slp_p(loc_slp_min);
         end
         
-        T_nam     = [file_name(12:end)];
+        % Derive the timestamp from the configured prefix rather than a
+        % fixed character position, so domain/case prefixes remain portable.
+        prefix = [head_nam,'_'];
+        assert(startsWith(file_name,prefix),'TC_track:InputName',...
+            'Input name does not start with the configured prefix: %s',file_name)
+        T_nam = char(extractAfter(string(file_name),strlength(prefix)));
         Save_file = [Save_nam,'_',T_nam,'.mat'];
         save([save_dir,'/',Save_file],...
             'T','tc_lon','tc_lat','tc_p','tc_w',...

@@ -1,15 +1,21 @@
 load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/gsn_code.ncl"
 load "$NCARG_ROOT/lib/ncarg/nclscripts/wrf/WRFUserARW.ncl"
 
-dir  = "/vortexfs1/home/yang.yu/Clark/application/WPTCS/Result/Muifa/CTRL/WRF/"
-filename  = "wrfout_d03*"
+dir = "DATA/"
+if (.not. isvar("filename")) then
+  filename = "wrfout_d03*"
+end if
 
-all_files = systemfunc("ls "+dir+filename)
+; Process only the input links created by link_wrf_data.sh.  Derived NetCDF
+; products live in the same DATA directory and otherwise match wrfout_d03*,
+; causing a rerun to try opening its own *_time.nc and field products as WRF.
+all_files = systemfunc("find "+dir+" -maxdepth 1 -type l -name '"+filename+"' -print | sort")
 time      = -1
 
 do i = 0,dimsizes(all_files)-1,1
 
   fileI = all_files(i)
+  fileSafe = str_sub_str(fileI,":","_")
   print(fileI)
   a     = addfile(fileI,"r")
 
@@ -19,7 +25,7 @@ do i = 0,dimsizes(all_files)-1,1
 ;----------------------------------------------------------------------------
   varN  = "Times"
   var   = wrf_user_getvar(a,varN,time)
-  fileO = fileI+"_time.nc"
+  fileO = fileSafe+"_time.nc"
   fileS = addfile(fileO, "c")
   fileS->time = var
   delete(var)  
@@ -28,7 +34,7 @@ do i = 0,dimsizes(all_files)-1,1
 ;----------------------------------------------------------------------------
   varN  = "lon"
   var   = wrf_user_getvar(a,varN,time)
-  fileO = fileI+"_"+varN+".nc"
+  fileO = fileSafe+"_"+varN+".nc"
   fileS = addfile(fileO, "c")
   fileS->lon = var
   delete(var)  
@@ -37,7 +43,7 @@ do i = 0,dimsizes(all_files)-1,1
 ;----------------------------------------------------------------------------
   varN  = "lat"
   var   = wrf_user_getvar(a,varN,time)
-  fileO = fileI+"_"+varN+".nc"
+  fileO = fileSafe+"_"+varN+".nc"
   fileS = addfile(fileO, "c")
   fileS->lat = var
   delete(var)  
@@ -48,7 +54,7 @@ do i = 0,dimsizes(all_files)-1,1
   var   = wrf_user_getvar(a,varN,time)
   var@description  = "Hight"
   var@units        = "m"
-  fileO = fileI+"_z.nc"
+  fileO = fileSafe+"_z.nc"
   fileS = addfile(fileO, "c")
   fileS->z = var
   delete(var)
@@ -59,7 +65,7 @@ do i = 0,dimsizes(all_files)-1,1
   var   = wrf_user_getvar(a,varN,time)
   var@description  = "Terrain hight"
   var@units        = "m"
-  fileO = fileI+"_terrian.nc"
+  fileO = fileSafe+"_terrian.nc"
   fileS = addfile(fileO, "c")
   fileS->terrian = var
   delete(var)
@@ -70,7 +76,7 @@ do i = 0,dimsizes(all_files)-1,1
   var   = wrf_user_getvar(a,varN,time)
   var@description  = "Pressure"
   var@units        = "hPa"
-  fileO = fileI+"_p.nc"
+  fileO = fileSafe+"_p.nc"
   fileS = addfile(fileO, "c")
   fileS->p = var
   delete(var)
@@ -82,7 +88,7 @@ do i = 0,dimsizes(all_files)-1,1
   var   = var
   var@description  = "Planetary Boundary Layer High"
   var@units        = "m"
-  fileO = fileI+"_pblh.nc"
+  fileO = fileSafe+"_pblh.nc"
   fileS = addfile(fileO, "c")
   fileS->pblh = var
   delete(var)
@@ -94,7 +100,7 @@ do i = 0,dimsizes(all_files)-1,1
 ;----------------------------------------------------------------------------
   varN  = "theta"
   var   = wrf_user_getvar(a,varN,time)
-  fileO = fileI+"_theta.nc"
+  fileO = fileSafe+"_theta.nc"
   fileS = addfile(fileO, "c")
   fileS->theta = var
   delete(var)
@@ -103,7 +109,7 @@ do i = 0,dimsizes(all_files)-1,1
 ;----------------------------------------------------------------------------
   varN  = "eth"
   var   = wrf_user_getvar(a,varN,time)
-  fileO = fileI+"_thetaE.nc"
+  fileO = fileSafe+"_thetaE.nc"
   fileS = addfile(fileO, "c")
   fileS->thetaE = var
   delete(var)
@@ -112,7 +118,7 @@ do i = 0,dimsizes(all_files)-1,1
 ;----------------------------------------------------------------------------
   varN  = "tk"
   var   = wrf_user_getvar(a,varN,time)
-  fileO = fileI+"_tk.nc"
+  fileO = fileSafe+"_tk.nc"
   fileS = addfile(fileO, "c")
   fileS->tk = var
   delete(var)
@@ -124,7 +130,7 @@ do i = 0,dimsizes(all_files)-1,1
   var   = var
   var@description  = "Relative Humidity"
   var@units        = "%"
-  fileO = fileI+"_rh.nc"
+  fileO = fileSafe+"_rh.nc"
   fileS = addfile(fileO, "c")
   fileS->rh = var
   delete(var)
@@ -135,7 +141,7 @@ do i = 0,dimsizes(all_files)-1,1
   var   = wrf_user_getvar(a,varN,time)
   var@description  = "Potential Vorticity"
   var@units        = "PVU"
-  fileO = fileI+"_"+varN+".nc"
+  fileO = fileSafe+"_"+varN+".nc"
   fileS = addfile(fileO, "c")
   fileS->pvo = var
   delete(var)
@@ -147,7 +153,7 @@ do i = 0,dimsizes(all_files)-1,1
   var   = var*24*60*60
   var@description  = "Microphysics Latent Heating"
   var@units        = "K day-1"
-  fileO = fileI+"_"+varN+".nc"
+  fileO = fileSafe+"_"+varN+".nc"
   fileS = addfile(fileO, "c")
   fileS->H_DIABATIC = var
   delete(var)
@@ -159,7 +165,7 @@ do i = 0,dimsizes(all_files)-1,1
   var   = var*24*60*60
   var@description  = "Theta Tendency due to Radiation"
   var@units        = "K day-1"
-  fileO = fileI+"_"+varN+".nc"
+  fileO = fileSafe+"_"+varN+".nc"
   fileS = addfile(fileO, "c")
   fileS->RTHRATEN = var
   delete(var)
@@ -171,7 +177,7 @@ do i = 0,dimsizes(all_files)-1,1
   var   = var*24*60*60
   var@description  = "Theta Tendency due to Longwave Radiation"
   var@units        = "K day-1"
-  fileO = fileI+"_"+varN+".nc"
+  fileO = fileSafe+"_"+varN+".nc"
   fileS = addfile(fileO, "c")
   fileS->RTHRATLW = var
   delete(var)
@@ -183,7 +189,7 @@ do i = 0,dimsizes(all_files)-1,1
   var   = var*24*60*60
   var@description  = "Theta Tendency due to Shortwave Radiation"
   var@units        = "K day-1"
-  fileO = fileI+"_"+varN+".nc"
+  fileO = fileSafe+"_"+varN+".nc"
   fileS = addfile(fileO, "c")
   fileS->RTHRATSW = var
   delete(var)
@@ -195,7 +201,7 @@ do i = 0,dimsizes(all_files)-1,1
   var   = var*1000
   var@description  = "Water vapor mixing ratio"
   var@units        = "g kg-1"
-  fileO = fileI+"_"+varN+".nc"
+  fileO = fileSafe+"_"+varN+".nc"
   fileS = addfile(fileO, "c")
   fileS->QVAPOR = var
   delete(var)
@@ -207,7 +213,7 @@ do i = 0,dimsizes(all_files)-1,1
   var   = var*1000
   var@description  = "Cloud water mixing ratio"
   var@units        = "g kg-1"
-  fileO = fileI+"_"+varN+".nc"
+  fileO = fileSafe+"_"+varN+".nc"
   fileS = addfile(fileO, "c")
   fileS->QCLOUD = var
   delete(var)
@@ -219,7 +225,7 @@ do i = 0,dimsizes(all_files)-1,1
   var   = var*1000
   var@description  = "Rain water mixing ratio"
   var@units        = "g kg-1"
-  fileO = fileI+"_"+varN+".nc"
+  fileO = fileSafe+"_"+varN+".nc"
   fileS = addfile(fileO, "c")
   fileS->QRAIN = var
   delete(var)
@@ -231,7 +237,7 @@ do i = 0,dimsizes(all_files)-1,1
   var   = var*1000
   var@description  = "Ice mixing ratio"
   var@units        = "g kg-1"
-  fileO = fileI+"_"+varN+".nc"
+  fileO = fileSafe+"_"+varN+".nc"
   fileS = addfile(fileO, "c")
   fileS->QICE = var
   delete(var)
@@ -243,7 +249,7 @@ do i = 0,dimsizes(all_files)-1,1
   var   = var*1000
   var@description  = "Snow mixing ratio"
   var@units        = "g kg-1"
-  fileO = fileI+"_"+varN+".nc"
+  fileO = fileSafe+"_"+varN+".nc"
   fileS = addfile(fileO, "c")
   fileS->QSNOW = var
   delete(var)
@@ -255,7 +261,7 @@ do i = 0,dimsizes(all_files)-1,1
   var   = var*1000
   var@description  = "Graupel mixing ratio"
   var@units        = "g kg-1"
-  fileO = fileI+"_"+varN+".nc"
+  fileO = fileSafe+"_"+varN+".nc"
   fileS = addfile(fileO, "c")
   fileS->QGRAUP = var
   delete(var)
@@ -268,7 +274,7 @@ do i = 0,dimsizes(all_files)-1,1
   var   = varP/(varT*varR)
   var@description  = "Density of dry air"
   var@units        = "kg m-3"
-  fileO = fileI+"_rhoD.nc"
+  fileO = fileSafe+"_rhoD.nc"
   fileS = addfile(fileO, "c")
   fileS->rhoD = var
   delete(varP)
@@ -283,7 +289,7 @@ do i = 0,dimsizes(all_files)-1,1
   var   = 1/var
   var@description  = "Density"
   var@units        = "kg m-3"
-  fileO = fileI+"_rho.nc"
+  fileO = fileSafe+"_rho.nc"
   fileS = addfile(fileO, "c")
   fileS->rho = var
   delete(var)
@@ -292,7 +298,7 @@ do i = 0,dimsizes(all_files)-1,1
 ;----------------------------------------------------------------------------
   varN  = "SST"
   var   = wrf_user_getvar(a,varN,time)
-  fileO = fileI+"_sst.nc"
+  fileO = fileSafe+"_sst.nc"
   fileS = addfile(fileO, "c")
   fileS->sst = var
   delete(var)
@@ -306,7 +312,7 @@ do i = 0,dimsizes(all_files)-1,1
   var   = varDN-varUP
   var@long_name  = "Short Wave Radiation (downward positive)"
   var@units      = "W m-2"
-  fileO = fileI+"_gsw.nc"
+  fileO = fileSafe+"_gsw.nc"
   fileS = addfile(fileO, "c")
   fileS->gsw = var
   delete(varDN)
@@ -322,7 +328,7 @@ do i = 0,dimsizes(all_files)-1,1
   var   = varUP-varDN
   var@long_name  = "Long Wave Radiation (upward positive)"
   var@units      = "W m-2"
-  fileO = fileI+"_glw.nc"
+  fileO = fileSafe+"_glw.nc"
   fileS = addfile(fileO, "c")
   fileS->glw = var
   delete(varDN)
@@ -335,7 +341,7 @@ do i = 0,dimsizes(all_files)-1,1
   var   = wrf_user_getvar(a,varN,time)
   var@long_name  = "Latent Heat Flux (upward positive)"
   var@units      = "W m-2"
-  fileO = fileI+"_lh.nc"
+  fileO = fileSafe+"_lh.nc"
   fileS = addfile(fileO, "c")
   fileS->lh = var
   delete(var)
@@ -346,7 +352,7 @@ do i = 0,dimsizes(all_files)-1,1
   var   = wrf_user_getvar(a,varN,time)
   var@long_name  = "Sensible Heat Flux (upward positive)"
   var@units      = "W m-2"
-  fileO = fileI+"_hfx.nc"
+  fileO = fileSafe+"_hfx.nc"
   fileS = addfile(fileO, "c")
   fileS->hfx = var
   delete(var)
@@ -358,9 +364,11 @@ do i = 0,dimsizes(all_files)-1,1
 ;----------------------------------------------------------------------------
   varN  = "omg"
   var   = wrf_user_getvar(a,varN,time)
-  fileO = fileI+"_"+varN+".nc"
+  var@description  = "Pressure vertical velocity"
+  var@units        = "Pa s-1"
+  fileO = fileSafe+"_omega.nc"
   fileS = addfile(fileO, "c")
-  fileS->omg = var
+  fileS->omega = var
   delete(var)
 ;----------------------------------------------------------------------------
 ; Absolute Vorticity
@@ -370,7 +378,7 @@ do i = 0,dimsizes(all_files)-1,1
   var   = var/10^5
   var@description  = "Absolute Vorticity"
   var@units        = "s-1"
-  fileO = fileI+"_"+varN+".nc"
+  fileO = fileSafe+"_"+varN+".nc"
   fileS = addfile(fileO, "c")
   fileS->avo = var
   delete(var)
@@ -381,32 +389,34 @@ do i = 0,dimsizes(all_files)-1,1
   var   = wrf_user_getvar(a,varN,time)
   var@description  = "Coriolis sine latitude term"
   var@units        = "s-1"
-  fileO = fileI+"_f.nc"
+  fileO = fileSafe+"_f.nc"
   fileS = addfile(fileO, "c")
   fileS->f = var
   delete(var)
 ;----------------------------------------------------------------------------
-; U Wind
+; Earth-relative horizontal wind
 ;----------------------------------------------------------------------------
-  varN  = "ua"
-  var   = wrf_user_getvar(a,varN,time)
-  var@description  = "U component of wind on mass points"
+  uvmet = wrf_user_getvar(a,"uvmet",time)
+  var   = uvmet(0,:,:,:)
+  var@description  = "Earth-relative eastward wind on mass points"
   var@units        = "m s-1"
-  fileO = fileI+"_u.nc"
+  var@components    = "eastward"
+  fileO = fileSafe+"_u.nc"
   fileS = addfile(fileO, "c")
   fileS->u = var
   delete(var)
 ;----------------------------------------------------------------------------
-; V Wind
+; Earth-relative northward wind
 ;----------------------------------------------------------------------------
-  varN  = "va"
-  var   = wrf_user_getvar(a,varN,time)
-  var@description  = "V component of wind on mass points"
+  var   = uvmet(1,:,:,:)
+  var@description  = "Earth-relative northward wind on mass points"
   var@units        = "m s-1"
-  fileO = fileI+"_v.nc"
+  var@components    = "northward"
+  fileO = fileSafe+"_v.nc"
   fileS = addfile(fileO, "c")
   fileS->v = var
   delete(var)
+  delete(uvmet)
 ;----------------------------------------------------------------------------
 ; W Wind
 ;----------------------------------------------------------------------------
@@ -414,7 +424,7 @@ do i = 0,dimsizes(all_files)-1,1
   var   = wrf_user_getvar(a,varN,time)
   var@description  = "W component of wind on mass points"
   var@units        = "m s-1"
-  fileO = fileI+"_w.nc"
+  fileO = fileSafe+"_w.nc"
   fileS = addfile(fileO, "c")
   fileS->w = var
   delete(var)
@@ -423,28 +433,32 @@ do i = 0,dimsizes(all_files)-1,1
 ;----------------------------------------------------------------------------
   varN  = "slp"
   var   = wrf_user_getvar(a,varN,time)
-  fileO = fileI+"_slp.nc"
+  fileO = fileSafe+"_slp.nc"
   fileS = addfile(fileO, "c")
   fileS->slp = var
   delete(var)
 ;----------------------------------------------------------------------------
-; 10m U component of wind on mass points
+; Earth-relative 10m eastward wind
 ;----------------------------------------------------------------------------
-  varN  = "U10"
-  var   = wrf_user_getvar(a,varN,time)
-  fileO = fileI+"_U10.nc"
+  uvmet10 = wrf_user_getvar(a,"uvmet10",time)
+  var   = uvmet10(0,:,:)
+  var@description = "Earth-relative 10m eastward wind"
+  var@components = "eastward"
+  fileO = fileSafe+"_U10.nc"
   fileS = addfile(fileO, "c")
   fileS->U10 = var
   delete(var)
 ;----------------------------------------------------------------------------
-; 10m V component of wind on mass points
+; Earth-relative 10m northward wind
 ;----------------------------------------------------------------------------
-  varN  = "V10"
-  var   = wrf_user_getvar(a,varN,time)
-  fileO = fileI+"_V10.nc"
+  var   = uvmet10(1,:,:)
+  var@description = "Earth-relative 10m northward wind"
+  var@components = "northward"
+  fileO = fileSafe+"_V10.nc"
   fileS = addfile(fileO, "c")
   fileS->V10 = var
   delete(var)
+  delete(uvmet10)
 ;----------------------------------------------------------------------------
 
 end do

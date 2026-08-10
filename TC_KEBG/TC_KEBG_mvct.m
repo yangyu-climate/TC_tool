@@ -48,10 +48,8 @@ for T = T_beg:T_frq:T_end
     [year,month,day,hour,minu,seco] = date2num(TIME);
     [year_num,month_num,day_num,...
      hour_num,minu_num,seco_num]    = date2str(TIME);
-    T_name    = [year_num,'-',month_num,'-',day_num,'_',...
-                 hour_num,':',minu_num,':',seco_num];
-    file_name = [Head_nam,'*',T_name,'*_time.nc'];
-    filename  = dir([Data_dir,'/',file_name]);
+    T_name    = tc_time_name(TIME);
+    [filename,~] = tc_find_time_file(Data_dir,Head_nam,TIME,'*_time.nc');
     if ~isempty(filename)
         TC_loc = tc_match_track_time(TC_time,TIME,0.5*T_frq,TC_diagnostic_valid);
         if ~isempty(TC_loc)
@@ -72,6 +70,7 @@ for T = T_beg:T_frq:T_end
         disp(['loading...'])
         file_name = filename.name(1:end-8);
         file_name = [Data_dir,'/',file_name];
+        tc_assert_earth_relative_wind([file_name,'_u.nc'],[file_name,'_v.nc'])
 
         lon        = ncload_2D([file_name,'_lon.nc']       ,'lon');
         lat        = ncload_2D([file_name,'_lat.nc']       ,'lat');
@@ -81,18 +80,25 @@ for T = T_beg:T_frq:T_end
         v          = ncload_3D([file_name,'_v.nc']         ,'v');
         tk         = ncload_3D([file_name,'_tk.nc']        ,'tk');
         theta      = ncload_3D([file_name,'_theta.nc']     ,'theta');
-        H_MICRO    = ncload_3D([file_name,'_H_DIABATIC.nc'],'H_DIABATIC')*Kday_to_Ks;
+        H_MICRO    = load_optional_3D([file_name,'_H_DIABATIC.nc'],'H_DIABATIC',theta)*Kday_to_Ks;
         H_RAD      = load_optional_3D([file_name,'_RTHRATEN.nc'],'RTHRATEN',H_MICRO)*Kday_to_Ks;
         H_PBL      = load_optional_3D([file_name,'_RTHBLTEN.nc'],'RTHBLTEN',H_MICRO)*Kday_to_Ks;
         H_CU       = load_optional_3D([file_name,'_RTHCUTEN.nc'],'RTHCUTEN',H_MICRO)*Kday_to_Ks;
+        H_SHALLOW  = load_optional_3D([file_name,'_RTHSHTEN.nc'],'RTHSHTEN',H_MICRO)*Kday_to_Ks;
         % All retained heating components are potential-temperature
         % tendencies (K s-1).  Conversion to temperature heating occurs
         % only after interpolation to a common pressure surface.
-        H_DIABATIC = H_MICRO + H_RAD + H_PBL + H_CU;
+        H_DIABATIC = H_MICRO + H_RAD + H_PBL + H_CU + H_SHALLOW;
         heating_components_available = struct('micro',true,...
             'radiation',~isempty(dir([file_name,'_RTHRATEN.nc'])),...
             'pbl',~isempty(dir([file_name,'_RTHBLTEN.nc'])),...
-            'cumulus',~isempty(dir([file_name,'_RTHCUTEN.nc'])));
+            'cumulus',~isempty(dir([file_name,'_RTHCUTEN.nc'])),...
+            'shallow_convection',~isempty(dir([file_name,'_RTHSHTEN.nc'])));
+        heating_components_available.micro = ~isempty(dir([file_name,'_H_DIABATIC.nc']));
+        if ~any(struct2array(heating_components_available))
+            warning('TC_KEBG:NoHeatingTerms',...
+                'No diabatic-heating tendencies were exported for %s; KEBG heating pathways are zero.',file_name)
+        end
 
         u = u - u_TC;
         v = v - v_TC;
@@ -109,25 +115,18 @@ for T = T_beg:T_frq:T_end
         mask  = NaN(size(lon));
         x = X;
         y = Y;
-        mask(find(dist<=Radius)) = 1;
-
-        for i=1:size(x,1)
-            for j=1:size(x,2)
-                if x(i,j)~=0||y(i,j)~=0
-                    phi(i,j) = get_angle(x(i,j),y(i,j))/180*pi;
-                    r(i,j)   = sqrt(x(i,j)^2+y(i,j)^2);
-                else
-                    phi(i,j) = 0;
-                    r(i,j)   = 0;
-                end
-            end
-        end
+        mask(dist<=Radius) = 1;
+        phi = mod(atan2(y,x),2*pi);
+        r   = hypot(x,y);
 
         [u,v] = VectorTrans_R2C(x,y,u,v);
 
         [X,Y] = meshgrid(R,PHI);
         lon   = Car2Cly(r,phi,lon,X,Y);
         lat   = Car2Cly(r,phi,lat,X,Y);
+        output_size = [size(P,1),numel(PHI),numel(R)];
+        PS = NaN(output_size); omegaS = PS; uS = PS; vS = PS;
+        tkS = PS; thetaS = PS; H_DIABATICS = PS;
         for k=1:size(P,1)
             PS(k,:,:)          = Car2Cly(r,phi,squeeze(P(k,:,:)).*mask,X,Y);
             omegaS(k,:,:)      = Car2Cly(r,phi,squeeze(omega(k,:,:)).*mask,X,Y);
@@ -155,7 +154,7 @@ for T = T_beg:T_frq:T_end
             'lon_TC','lat_TC','lon_track','lat_track','center_slp','slp_track','swd_track','u_TC','v_TC',...
             'center_motion_method','heating_components_available','TC_center_valid')
         clear TIME lon lat x y X Y P omega
-        clear u v tk theta H_DIABATIC H_MICRO H_RAD H_PBL H_CU
+        clear u v tk theta H_DIABATIC H_MICRO H_RAD H_PBL H_CU H_SHALLOW
 
         end
     end

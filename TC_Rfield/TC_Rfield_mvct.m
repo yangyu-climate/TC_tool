@@ -45,10 +45,8 @@ for T = T_beg:T_frq:T_end
     [year,month,day,hour,minu,seco] = date2num(TIME);
     [year_num,month_num,day_num,...
      hour_num,minu_num,seco_num]    = date2str(TIME);
-    T_name    = [year_num,'-',month_num,'-',day_num,'_',...
-                 hour_num,':',minu_num,':',seco_num];
-    file_name = [Head_nam,'*',T_name,'*_time.nc'];
-    filename  = dir([Data_dir,'/',file_name]);
+    T_name    = tc_time_name(TIME);
+    [filename,~] = tc_find_time_file(Data_dir,Head_nam,TIME,'*_time.nc');
     if ~isempty(filename)
         TC_loc = tc_match_track_time(TC_time,TIME,0.5*T_frq,TC_diagnostic_valid);
         if ~isempty(TC_loc)
@@ -67,6 +65,7 @@ for T = T_beg:T_frq:T_end
         disp(['loading...'])	
         file_name = filename.name(1:end-8);
         file_name = [Data_dir,'/',file_name];
+        tc_assert_earth_relative_wind([file_name,'_u.nc'],[file_name,'_v.nc'])
         % Basic Variables
         lon        = ncload_2D([file_name,'_lon.nc'] ,'lon');
         lat        = ncload_2D([file_name,'_lat.nc'] ,'lat');
@@ -115,49 +114,56 @@ for T = T_beg:T_frq:T_end
         QI         = (QICE + QSNOW + QGRAUP);
         clear QVAPOR QCLOUD QGRAUP QRAIN QSNOW QICE
 
-        for k=1:size(z,1)
-        rvo(k,:,:) = squeeze(avo(k,:,:))-f;
-        end
+        rvo = avo - reshape(f,1,size(f,1),size(f,2));
 
         disp(['Calculating...'])
         mask  = NaN*ones(size(lon));
         [dist,X,Y] = tc_great_circle_xy(lat,lon,lat_TC,lon_TC);
         mask(dist<=(Radius+dR)) = 1;
+        % Source geometry is shared by every field and vertical level. Reuse
+        % one triangulation instead of rebuilding it for each griddata call.
+        Fxy = scatteredInterpolant(X(:),Y(:),zeros(numel(X),1),'linear','none');
 
-        lon  = griddata(X,Y,lon .*mask,x,y);
-        lat  = griddata(X,Y,lat .*mask,x,y);
-        f    = griddata(X,Y,f   .*mask,x,y);
-        pblh = griddata(X,Y,pblh.*mask,x,y);
-        GLW  = griddata(X,Y,GLW .*mask,x,y);
-        GSW  = griddata(X,Y,GSW .*mask,x,y);
-        LHF  = griddata(X,Y,LHF .*mask,x,y);
-        SHF  = griddata(X,Y,SHF .*mask,x,y);
-        SLP  = griddata(X,Y,SLP .*mask,x,y);
-        SST  = griddata(X,Y,SST .*mask,x,y);
-        U10  = griddata(X,Y,U10 .*mask,x,y);
-        V10  = griddata(X,Y,V10 .*mask,x,y);
+        lon  = remap_xy(Fxy,lon .*mask,x,y);
+        lat  = remap_xy(Fxy,lat .*mask,x,y);
+        f    = remap_xy(Fxy,f   .*mask,x,y);
+        pblh = remap_xy(Fxy,pblh.*mask,x,y);
+        GLW  = remap_xy(Fxy,GLW .*mask,x,y);
+        GSW  = remap_xy(Fxy,GSW .*mask,x,y);
+        LHF  = remap_xy(Fxy,LHF .*mask,x,y);
+        SHF  = remap_xy(Fxy,SHF .*mask,x,y);
+        SLP  = remap_xy(Fxy,SLP .*mask,x,y);
+        SST  = remap_xy(Fxy,SST .*mask,x,y);
+        U10  = remap_xy(Fxy,U10 .*mask,x,y);
+        V10  = remap_xy(Fxy,V10 .*mask,x,y);
+        output_size = [size(z,1),size(x,1),size(x,2)];
+        zS = NaN(output_size); PS = zS; uS = zS; vS = zS; wS = zS;
+        avoS = zS; pvoS = zS; rvoS = zS; rhoS = zS; thetaS = zS;
+        thetaES = zS; DethDzS = zS; H_DIABATICS = zS;
+        QvS = zS; QcS = zS; QrS = zS; QiS = zS; QsS = zS; QgS = zS;
+        QWS = zS; QIS = zS;
         for k = 1:size(z,1)
-            zS(k,:,:)          = griddata(X,Y,squeeze(z(k,:,:)),x,y); 
-            PS(k,:,:)          = griddata(X,Y,squeeze(P(k,:,:)),x,y); 
-            uS(k,:,:)          = griddata(X,Y,squeeze(u(k,:,:))         .*mask,x,y); 
-            vS(k,:,:)          = griddata(X,Y,squeeze(v(k,:,:))         .*mask,x,y); 
-            wS(k,:,:)          = griddata(X,Y,squeeze(w(k,:,:))         .*mask,x,y);
-            avoS(k,:,:)        = griddata(X,Y,squeeze(avo(k,:,:))       .*mask,x,y); 
-            pvoS(k,:,:)        = griddata(X,Y,squeeze(pvo(k,:,:))       .*mask,x,y); 
-            rvoS(k,:,:)        = griddata(X,Y,squeeze(rvo(k,:,:))       .*mask,x,y); 
-            rhoS(k,:,:)        = griddata(X,Y,squeeze(rho(k,:,:))       .*mask,x,y);
-            thetaS(k,:,:)      = griddata(X,Y,squeeze(theta(k,:,:))     .*mask,x,y);
-            thetaES(k,:,:)     = griddata(X,Y,squeeze(thetaE(k,:,:))    .*mask,x,y);
-            DethDzS(k,:,:)     = griddata(X,Y,squeeze(DethDz(k,:,:))    .*mask,x,y);
-            H_DIABATICS(k,:,:) = griddata(X,Y,squeeze(H_DIABATIC(k,:,:)).*mask,x,y); 
-            QvS(k,:,:)         = griddata(X,Y,squeeze(Qv(k,:,:))        .*mask,x,y); 
-            QcS(k,:,:)         = griddata(X,Y,squeeze(Qc(k,:,:))        .*mask,x,y); 
-            QrS(k,:,:)         = griddata(X,Y,squeeze(Qr(k,:,:))        .*mask,x,y); 
-            QiS(k,:,:)         = griddata(X,Y,squeeze(Qi(k,:,:))        .*mask,x,y); 
-            QsS(k,:,:)         = griddata(X,Y,squeeze(Qs(k,:,:))        .*mask,x,y); 
-            QgS(k,:,:)         = griddata(X,Y,squeeze(Qg(k,:,:))        .*mask,x,y); 
-            QWS(k,:,:)         = griddata(X,Y,squeeze(QW(k,:,:))        .*mask,x,y);
-            QIS(k,:,:)         = griddata(X,Y,squeeze(QI(k,:,:))        .*mask,x,y);
+            zS(k,:,:)          = remap_xy(Fxy,squeeze(z(k,:,:)),x,y);
+            PS(k,:,:)          = remap_xy(Fxy,squeeze(P(k,:,:)),x,y);
+            uS(k,:,:)          = remap_xy(Fxy,squeeze(u(k,:,:)).*mask,x,y);
+            vS(k,:,:)          = remap_xy(Fxy,squeeze(v(k,:,:)).*mask,x,y);
+            wS(k,:,:)          = remap_xy(Fxy,squeeze(w(k,:,:)).*mask,x,y);
+            avoS(k,:,:)        = remap_xy(Fxy,squeeze(avo(k,:,:)).*mask,x,y);
+            pvoS(k,:,:)        = remap_xy(Fxy,squeeze(pvo(k,:,:)).*mask,x,y);
+            rvoS(k,:,:)        = remap_xy(Fxy,squeeze(rvo(k,:,:)).*mask,x,y);
+            rhoS(k,:,:)        = remap_xy(Fxy,squeeze(rho(k,:,:)).*mask,x,y);
+            thetaS(k,:,:)      = remap_xy(Fxy,squeeze(theta(k,:,:)).*mask,x,y);
+            thetaES(k,:,:)     = remap_xy(Fxy,squeeze(thetaE(k,:,:)).*mask,x,y);
+            DethDzS(k,:,:)     = remap_xy(Fxy,squeeze(DethDz(k,:,:)).*mask,x,y);
+            H_DIABATICS(k,:,:) = remap_xy(Fxy,squeeze(H_DIABATIC(k,:,:)).*mask,x,y);
+            QvS(k,:,:)         = remap_xy(Fxy,squeeze(Qv(k,:,:)).*mask,x,y);
+            QcS(k,:,:)         = remap_xy(Fxy,squeeze(Qc(k,:,:)).*mask,x,y);
+            QrS(k,:,:)         = remap_xy(Fxy,squeeze(Qr(k,:,:)).*mask,x,y);
+            QiS(k,:,:)         = remap_xy(Fxy,squeeze(Qi(k,:,:)).*mask,x,y);
+            QsS(k,:,:)         = remap_xy(Fxy,squeeze(Qs(k,:,:)).*mask,x,y);
+            QgS(k,:,:)         = remap_xy(Fxy,squeeze(Qg(k,:,:)).*mask,x,y);
+            QWS(k,:,:)         = remap_xy(Fxy,squeeze(QW(k,:,:)).*mask,x,y);
+            QIS(k,:,:)         = remap_xy(Fxy,squeeze(QI(k,:,:)).*mask,x,y);
         end
         z              = zS;
         P              = PS;
@@ -193,10 +199,8 @@ for T = T_beg:T_frq:T_end
         % Rectangular to Cylindrical
         [u,v] = VectorTrans_R2C(x,y,u,v);
         
-        r     = sqrt(x.^2+y.^2)*1000;
-        for k = 1:size(z,1)
-        M(k,:,:) = r.*squeeze(v(k,:,:)) + 0.5*f.*(r.^2);
-        end
+        r     = hypot(x,y)*1000;
+        M     = r.*v + 0.5*reshape(f,1,size(f,1),size(f,2)).*(r.^2);
         r     = r/1000;
 
         % Save Data
@@ -224,4 +228,9 @@ for T = T_beg:T_frq:T_end
 
         end
     end
+end
+
+function output = remap_xy(interpolant,values,xq,yq)
+interpolant.Values = values(:);
+output = interpolant(xq,yq);
 end

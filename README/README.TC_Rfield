@@ -112,7 +112,8 @@ TC_Rfield writes:
 - TC_Rfield/Result/SLICE
 - TC_Rfield/Result/VLEVEL
 
-The file prefix is currently `RF_YYYY-MM-DD_HH:MM:SS.mat`.
+The file prefix is `RF_YYYY-MM-DD_HH_MM_SS.mat` for cross-platform use.
+Readers also accept historic Linux files using `HH:MM:SS`.
 
 
 Important Parameters
@@ -129,9 +130,7 @@ Shared time parameters:
 MVCT parameters:
 
 - Radius
-- dR
-- rough_dist
-- rough_reso
+- resolution
 - Head_nam
 
 Slice parameters:
@@ -184,13 +183,14 @@ Detailed Calculation Notes
    - `v_cart = v_wrf - TC_V`
 
    The script builds a storm-centered Cartesian grid `(x,y)` with spacing
-   `resolution`. If the TC center lies exactly on the WRF grid and
-   `rough_dist = 1`, distances are computed from grid spacing for speed.
-   Otherwise, geodesic distance from `distbear` is used.
+   `resolution`. It uses great-circle distance and initial bearing from the
+   track centre to construct the moving-frame coordinates.
 
 3. Wind rotation and interpolation
 
-   `VectorTrans_R2C` converts storm-relative Cartesian winds to cylindrical
+   `Pre/PHY` exports earth-relative eastward/northward winds. After subtracting
+   the earth-relative track velocity, `VectorTrans_R2C` converts those
+   storm-relative Cartesian winds to cylindrical
    radial/tangential winds. Dynamic, thermodynamic, moisture, radiation, flux,
    and heating fields are interpolated to the storm-centered grid. The output in
    `Result/MVCT` is the common input for radial slices and selected-level maps.
@@ -233,9 +233,6 @@ Known Limitations
   configured in `TC_Rfield_config.m`.
 - Full validation requires real Pre/PHY/DATA files and the track file from
   TC_track.
-- The fast `rough_dist = 1` path assumes the TC center is exactly located on the
-  WRF lon/lat grid. If not, the script falls back to geodesic distance
-  calculation.
 - griddata/interp2 interpolation can leave NaN values near domain edges or where
   the requested storm-centered grid extends beyond available WRF data.
 - TC_Rfield_vlevel.m uses plain interp1 without extrapolation, so requested

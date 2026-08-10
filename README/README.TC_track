@@ -88,8 +88,8 @@ Workflow
 
    - Reads all matching detection files from TC_track/Data.
    - Uses `Ini_loc` as the first-position guess.
-   - For later times, selects the candidate nearest to the previous accepted
-     track position.
+   - For later times, selects the nearest candidate that also satisfies the
+     configured maximum translation speed from the last valid track position.
    - If a time has no valid candidate after the first valid point, it repeats
      the previous track point.
    - Saves the final track to TC_track/Result/Track_data.mat.
@@ -111,6 +111,8 @@ It contains:
 - SWD
 - LON_W
 - LAT_W
+- CENTER_VALID
+- CENTER_HELD
 
 Downstream modules use these fields directly.
 
@@ -125,35 +127,23 @@ Edit `TC_track_config.m` before applying the toolbox to another case.
 
 Detection parameters:
 
-- cfg.Head_nam: WRF domain prefix, for example `wrfout_d03`
+- cfg.Head_nam: WRF domain prefix, for example `wrfout_d03`. Detection-file
+  timestamps are derived from this prefix, so custom prefix lengths are supported.
 - resolution: model grid resolution in km
 - dR: smoothing resolution in km
 - TCR: 2 km pressure center search radius in km
 - TWR: maximum-wind search radius in km
+- Max_track_speed_ms: maximum accepted translation speed; candidates beyond it
+  are rejected and the centre is held.
+- Track_speed_gate_start_hours: time after the first valid centre during which
+  the speed gate is disabled, allowing the track to settle from an approximate
+  `Ini_loc`.
 
 Tracking parameters:
 
 - Time_beg
 - Time_end
 - Ini_loc
-
-
-Current Check Result
---------------------
-
-Checked with MATLAB R2021b on 2026-06-17.
-
-Result:
-
-- Run.m calls only existing TC_track scripts.
-- MATLAB syntax/checkcode parse completed for TC_Detect.m, TC_Track.m, and the
-  key center-detection helper functions.
-- The P2km-center plus identified minimum-SLP intensity logic passed a synthetic
-  test.
-- Internal dependencies were found: TC_center_CIM, TC_center_centroid,
-  TC_centroid_lonlat, running_mean_2D, mean_2D, and startup path tools.
-- The current workspace does not contain ../Pre/SLP/DATA, so a full numerical
-  detection/tracking run could not be performed in this checkout.
 
 
 Code Reasonableness Check
@@ -169,10 +159,11 @@ workflow:
   SLP as `tc_p`.
 - TC_center_CIM.m searches local pressure minima within the configured radius
   and then refines each candidate by a pressure-deficit centroid.
-- TC_Track.m connects candidates through time by nearest position, starting from
-  `Ini_loc`.
+- TC_Track.m connects candidates through time by nearest great-circle position,
+  starting from `Ini_loc`. It explicitly reads the scalar detection timestamp
+  `D.T`, so sub-daily WRF times are retained in `TIME`.
 - Track_data.mat keeps the expected downstream variables: TIME, LON, LAT, SLP,
-  SWD, LON_W, and LAT_W.
+  SWD, LON_W, LAT_W, CENTER_VALID, and CENTER_HELD.
 
 Important assumptions:
 
@@ -188,28 +179,15 @@ Important assumptions:
   observed or manually inspected storm positions.
 
 
-Fixes Made In This Check
-------------------------
-
-- TC_Detect.m uses the P2km-based center as the main center used by TC_Track.m.
-- The identified minimum SLP is saved as `tc_p`, so downstream modules still
-  read SLP intensity from the existing variable name.
-- The SLP-based center is still calculated, but it is saved separately as
-  slp_* diagnostic variables and no longer overwrites tc_lon, tc_lat, tc_w,
-  tw_lon, or tw_lat.
-- TC_centroid_lonlat.m now uses a function name matching its file name.
-
-
 Known Limitations
 -----------------
 
 - Time range, initial location, WRF domain name, grid resolution, and search
   radii are configured in `TC_track_config.m`.
-- TC_Track.m selects candidates by nearest longitude/latitude distance, not by
-  great-circle distance.
 - If a missing center occurs after tracking has started, TC_Track.m repeats the
-  previous point. This keeps downstream modules running but should be checked in
-  final diagnostics.
+  previous point and records `CENTER_VALID=false`, `CENTER_HELD=true`.
+  Downstream moving-frame diagnostics exclude held centres and their adjacent
+  translation-speed estimates.
 - Run.sh uses rm, nohup, and matlab, so it is intended for Linux or a compatible
   shell. On Windows, run Run.m from MATLAB.
 - Full verification requires real Pre/SLP/DATA files.
@@ -222,5 +200,6 @@ After running TC_track, inspect:
 
 - TC_track/Fig: quick-look center and wind plots.
 - TC_track/Data: per-time candidate detection files.
-- TC_track/Result/Track_data.mat: final TIME, LON, LAT, SLP, SWD, LON_W, LAT_W.
+- TC_track/Result/Track_data.mat: final TIME, LON, LAT, SLP, SWD, LON_W, LAT_W,
+  CENTER_VALID, CENTER_HELD.
 - Repeated consecutive points: these usually indicate missing detections.

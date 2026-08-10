@@ -10,7 +10,7 @@ contains no CTRL--NoTCFB comparison or RI-selection module.
 
 1. Run `../Pre/BGT/NCL_WRF_DATA.ncl`. Its output must include `*_omega.nc`
    (`omega = dp/dt`, Pa s-1) and every enabled heating tendency.
-   `RTHCUTEN` is exported only when it exists in WRF output. Confirm NetCDF
+   `RTHCUTEN` and `RTHSHTEN` are exported only when they exist in WRF output. Confirm NetCDF
    metadata before every experiment.
 2. Set the case, time range, track and input paths in `TC_KEBG_config.m`.
 3. Run `Run.m` (or `Run.sh`).  The scripts always execute in this order:
@@ -53,6 +53,10 @@ and negative Fourier partners, so its KE and APE are real one-sided spectral
 energies. Pointwise energy is `J kg-1`; rate terms are `W kg-1`. Variables with
 the `_int` suffix are mass-weighted domain means over the configured pressure
 and radial domain, not total Watts.
+
+The BGT input winds are earth-relative eastward/northward components before
+the track velocity is removed. Regenerate BGT and KEBG outputs if they were
+created from the older grid-relative `ua`/`va` export.
 
 The translational velocity removed from the horizontal wind is a geodesic
 finite-difference velocity of that same supplied track, with no independent
@@ -150,7 +154,7 @@ WN, not a unique one-way donor label because both `k` and `m` participate in a
 nonlinear triad. It requires MAT v7.3 and, at the default grid, about 2.9 GB
 per output time.
 
-`H_DIABATIC` and the WRF radiation, PBL, and cumulus tendencies are treated
+`H_DIABATIC` and the WRF radiation, PBL, deep-cumulus, and shallow-convection tendencies are treated
 as potential-temperature tendencies (`K s-1`). `TC_KEBG_calculate.m` converts
 their sum to temperature heating using `H_T=(T/theta) H_theta` before A3/A4.
 If a case writes temperature rather than potential-temperature tendencies, set

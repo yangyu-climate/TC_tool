@@ -8,8 +8,8 @@ temperature `theta` and equivalent potential temperature `thetaE`:
 PV_b = eta_a dot grad(b) / rho
 ```
 
-where `b` is either `theta` or `thetaE`, and `eta_a` is the absolute-vorticity
-vector. The default budget variable is `thetaE` because moist TC PV diagnostics
+where `b` is either `theta` or `thetaE`, and `eta_a` is the full
+absolute-vorticity vector. The default budget variable is `thetaE` because moist TC PV diagnostics
 usually need the complete moist scalar form.
 
 ## Workflow
@@ -58,8 +58,12 @@ The run sequence is two steps:
 - Grid and state: `lon`, `lat`, `z`, `p`, `rho`
 - Dynamics: `f`, `u`, `v`, `w`, `avo`, `kh`, `kv`, `RUBLTEN`, `RVBLTEN`
 - Thermodynamics: `theta`, `thetaE`, `H_DIABATIC`
-- Optional theta tendencies: `RTHRATEN`, `RTHBLTEN`, `RTHCUTEN`
+- Optional theta tendencies: `RTHRATEN`, `RTHBLTEN`, `RTHCUTEN`, `RTHSHTEN`
 - Optional comparison PV: `pvo`
+
+`u`/`v` and `RUBLTEN`/`RVBLTEN` are required to be earth-relative
+eastward/northward components. The BGT preprocessor rotates WRF projected-grid
+components before writing these files; regenerate prior BGT/PVBG products.
 
 If `pvo` exists it is retained as `pvo_wrf` for comparison. The budget itself is
 based on internally diagnosed Ertel PV:
@@ -95,6 +99,20 @@ PV_azimuth_adv  = -v/r * dPV/dphi
 PV_vertical_adv = -w * dPV/dz
 ```
 
+The cylindrical basis uses east as `phi=0` and positive `phi` counter-clockwise
+toward north. The code retains the full planetary vorticity vector:
+
+```text
+eta_r   = zeta_r   + 2 Omega cos(latitude) sin(phi)
+eta_phi = zeta_phi + 2 Omega cos(latitude) cos(phi)
+eta_z   = avo     = zeta_z + 2 Omega sin(latitude)
+```
+
+`avo` is WRF's vertical absolute vorticity. The horizontal planetary terms are
+constructed from the remapped latitude and `cfg.Omega` (default
+`7.292115e-5 s-1`), so they participate in both the Ertel PV and the thermal
+PV source term.
+
 The solenoidal/composition source is retained explicitly:
 
 ```text
@@ -113,7 +131,10 @@ PV_therm = eta_a dot grad(Db/Dt) / rho
 ```
 
 For `Use_thetaE = 1`, `Db/Dt` is diagnosed from the material tendency of
-`thetaE` on the moving cylindrical grid. For `Use_thetaE = 0`, `Db/Dt` is set
+`thetaE` on the moving cylindrical grid. This is a generalized moist-scalar PV
+diagnostic: its source should not be interpreted as a uniquely separated
+microphysical heating term, or as a complete process-separated moist-PV
+budget. For `Use_thetaE = 0`, `Db/Dt` is set
 to the total theta tendency `H_DIABATIC` read from WRF heating outputs.
 
 The frictional/nonconservative momentum term is:
@@ -142,11 +163,18 @@ represented by `RUBLTEN/RVBLTEN`, any true model tendency not exported to
 `Pre/BGT/DATA`, numerical diffusion, interpolation errors, time/space
 discretization error, and mismatch in the diagnosed material tendencies.
 
+`heating_components_available` is saved with the remapped and final PV output.
+It identifies which WRF heating tendencies were actually present; do not label
+the sum as total diabatic heating when an enabled physics component is absent.
+
 ## Main Outputs
 
 `Result/PVBG/PVBG_*.mat` includes:
 
 - `pv_name`: selected budget scalar, `theta` or `thetaE`.
+- `PV_budget_interpretation`: explicit scope of the selected PV diagnostic.
+  In particular, `thetaE` output is a generalized scalar-PV budget, not a
+  strictly process-separated moist-PV budget.
 - `pv_theta`, `pv_thetaE`, `pv_diff`: azimuthal-mean Ertel PV diagnostics in
   SI units.
 - `pv_theta_pvu`, `pv_thetaE_pvu`, `pv_diff_pvu`: same fields converted to PVU.
@@ -197,12 +225,19 @@ in height-radius coordinates.
   one-sided difference. Held centres and neighbouring samples are excluded.
 - PV tendency uses fourth-order centered differencing when possible, otherwise
   second-order centered, one-sided, or first-order fallback near boundaries.
+  `Tendency_frq` selects the required `t +/- n*Tendency_frq` stencil times
+  (within 0.5 s timestamp tolerance); missing requested times are not silently
+  replaced by adjacent output files.
 - The `r = 0` column is masked for terms containing `1/r`.
+- `Omega` sets Earth's rotation rate used to form horizontal planetary
+  vorticity components.
 
 ## Typical Edits
 
 - Change parameters in `TC_PVBG_config.m`.
-- Use `Time_beg`, `Time_end`, `Time_frq`, and `Tendency_frq` for time control.
+- Use `Time_beg`, `Time_end`, and `Time_frq` for analysis/output timing.
+  `Tendency_frq` is the finite-difference stencil interval, so corresponding
+  remapped files must exist at `t +/- n*Tendency_frq`.
 - Use `Radius`, `dR`, and `dPhi` for the cylindrical grid.
 - Use `IF_Zfix`, `z_limit`, `z_level`, `z_low`, and `z_lowL` for the
   fixed-height grid.

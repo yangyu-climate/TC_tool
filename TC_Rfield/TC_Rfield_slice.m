@@ -41,11 +41,7 @@ if ~isempty(filename)
         v_TC      = load_data(fileN,'v_TC');
        
         if TIME>=T_beg&&TIME<=T_end 
-        [year,month,day,hour,minu,seco] = date2num(TIME);
-        [year_num,month_num,day_num,...
-         hour_num,minu_num,seco_num]    = date2str(TIME);
-        T_name    = [year_num,'-',month_num,'-',day_num,'_',...
-                     hour_num,':',minu_num,':',seco_num];
+        T_name    = tc_time_name(TIME);
         disp([' '])
         disp(['Date: ',T_name])
         disp(['File: ',fileN])

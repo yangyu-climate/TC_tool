@@ -17,9 +17,8 @@ Cp = cfg.calc.Cp; Rd = cfg.calc.Rd; g = 9.81;
 if cfg.calc.Run_self_test, self_test(Cp,Rd); end
 
 for TIME = T_beg:T_frq:T_end
-    [yy,mm,dd,hh,mi,ss] = date2str(TIME);
-    T_name = [yy,'-',mm,'-',dd,'_',hh,':',mi,':',ss];
-    hit = dir([Data_dir,'/',cfg.Save_nam,'*',T_name,'.mat']);
+    T_name = tc_time_name(TIME);
+    [hit,~] = tc_find_time_file(Data_dir,cfg.Save_nam,TIME,'.mat');
     if isempty(hit), continue, end
     file_in = [Data_dir,'/',hit(1).name];
     fprintf('\nDate: %s\n',T_name)
@@ -219,9 +218,7 @@ end
 end
 
 function [KE,APE,found] = energy_state_at(TIME,dataDir,cfg,plev,r,WN,Cp,Rd,radius_limit,apeFactor)
-[yy,mm,dd,hh,mi,ss] = date2str(TIME);
-name=[yy,'-',mm,'-',dd,'_',hh,':',mi,':',ss];
-hit=dir([dataDir,'/',cfg.Save_nam,'*',name,'.mat']);
+[hit,~] = tc_find_time_file(dataDir,cfg.Save_nam,TIME,'.mat');
 found=~isempty(hit); KE=[]; APE=[];
 if ~found, return, end
 f=[dataDir,'/',hit(1).name];

@@ -21,11 +21,7 @@ if ~isempty(filename)
         file_name = filename(N).name;
         fileN     = [Data_dir,'/',file_name];
         TIME      = load_data(fileN,'TIME');
-        [year,month,day,hour,minu,seco] = date2num(TIME);
-        [year_num,month_num,day_num,...
-         hour_num,minu_num,seco_num]    = date2str(TIME);
-        T_name = [year_num,'-',month_num,'-',day_num,'_',...
-                  hour_num,':',minu_num,':',seco_num];
+        T_name = tc_time_name(TIME);
         disp([' '])
         disp(['Date: ',T_name])
         disp(['File: ',fileN])
@@ -57,23 +53,17 @@ if ~isempty(filename)
         center_motion_method = load_data(fileN,'center_motion_method');
 
         dr = dR*1000;
-        for k=1:size(P,1)
-            for j=1:size(P,2)
-                r(k,j,:) = R*1000;
-            end
-        end
+        r = repmat(reshape(R*1000,1,1,[]),size(P,1),size(P,2),1);
         r(r==0) = NaN;
 
         disp(['Calculating...'])
-        for j=1:size(P,2)
-            um(:,j,:)      = nanmean(u,2);
-            vm(:,j,:)      = nanmean(v,2);
-            Pm(:,j,:)      = nanmean(p,2);
-            omegam(:,j,:)  = nanmean(omega,2);
-            Tm(:,j,:)      = nanmean(tk,2);
-            thm(:,j,:)     = nanmean(theta,2);
-            Hm(:,j,:)      = nanmean(H_DIABATIC,2);
-        end
+        um     = mean(u,2,'omitnan');
+        vm     = mean(v,2,'omitnan');
+        Pm     = mean(p,2,'omitnan');
+        omegam = mean(omega,2,'omitnan');
+        Tm     = mean(tk,2,'omitnan');
+        thm    = mean(theta,2,'omitnan');
+        Hm     = mean(H_DIABATIC,2,'omitnan');
 
         up   = u          - um;
         vp   = v          - vm;

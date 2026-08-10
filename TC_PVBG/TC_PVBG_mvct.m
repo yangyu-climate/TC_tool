@@ -14,6 +14,7 @@ Radius     = cfg.Radius;
 dR         = cfg.dR;
 dPhi       = cfg.dPhi;
 Kday_to_Ks      = cfg.Kday_to_Ks;
+Omega           = cfg.Omega;
 IF_Zfix    = cfg.IF_Zfix;
 z_hight    = cfg.z_hight;
 z_fix      = z_hight(:);
@@ -47,10 +48,8 @@ center_motion_method = 'track_geodesic_finite_difference';
 for T = T_beg:T_frq:T_end
     TIME = T;
     [year_num,month_num,day_num,hour_num,minu_num,seco_num] = date2str(TIME);
-    T_name = [year_num,'-',month_num,'-',day_num,'_',...
-              hour_num,':',minu_num,':',seco_num];
-    file_name = [Head_nam,'*',T_name,'*_time.nc'];
-    filename = dir([Data_dir,'/',file_name]);
+    T_name = tc_time_name(TIME);
+    [filename,~] = tc_find_time_file(Data_dir,Head_nam,TIME,'*_time.nc');
     if ~isempty(filename)
         TC_loc = tc_match_track_time(TC_time,TIME,0.5*T_frq,TC_diagnostic_valid);
         if ~isempty(TC_loc)
@@ -69,6 +68,8 @@ for T = T_beg:T_frq:T_end
             disp(['loading...'])
             file_name = filename.name(1:end-8);
             file_name = [Data_dir,'/',file_name];
+            tc_assert_earth_relative_wind([file_name,'_u.nc'],[file_name,'_v.nc'])
+            tc_assert_earth_relative_wind([file_name,'_RUBLTEN.nc'],[file_name,'_RVBLTEN.nc'])
 
             lon   = ncload_2D([file_name,'_lon.nc']  ,'lon');
             lat   = ncload_2D([file_name,'_lat.nc']  ,'lat');
@@ -92,13 +93,29 @@ for T = T_beg:T_frq:T_end
                 pvo = NaN(size(theta));
             end
 
-            H_MICRO    = ncload_3D([file_name,'_H_DIABATIC.nc'],'H_DIABATIC')*Kday_to_Ks;
+            H_MICRO    = load_optional_3D([file_name,'_H_DIABATIC.nc'],'H_DIABATIC',theta)*Kday_to_Ks;
             H_RAD      = load_optional_3D([file_name,'_RTHRATEN.nc'],'RTHRATEN',H_MICRO)*Kday_to_Ks;
             H_PBL      = load_optional_3D([file_name,'_RTHBLTEN.nc'],'RTHBLTEN',H_MICRO)*Kday_to_Ks;
             H_CU       = load_optional_3D([file_name,'_RTHCUTEN.nc'],'RTHCUTEN',H_MICRO)*Kday_to_Ks;
-            H_DIABATIC = H_MICRO + H_RAD + H_PBL + H_CU;
+            H_SHALLOW  = load_optional_3D([file_name,'_RTHSHTEN.nc'],'RTHSHTEN',H_MICRO)*Kday_to_Ks;
+            H_DIABATIC = H_MICRO + H_RAD + H_PBL + H_CU + H_SHALLOW;
+            heating_components_available = struct(...
+                'micro',~isempty(dir([file_name,'_H_DIABATIC.nc'])),...
+                'radiation',~isempty(dir([file_name,'_RTHRATEN.nc'])),...
+                'pbl',~isempty(dir([file_name,'_RTHBLTEN.nc'])),...
+                'cumulus',~isempty(dir([file_name,'_RTHCUTEN.nc'])),...
+                'shallow_convection',~isempty(dir([file_name,'_RTHSHTEN.nc'])));
+            if ~any(struct2array(heating_components_available))
+                warning('TC_PVBG:NoHeatingTerms',...
+                    'No diabatic-heating tendencies were exported for %s; the theta heating source is zero.',file_name)
+            end
 
             if IF_Zfix
+                fixed_size = [numel(z_fix),size(lon,1),size(lon,2)];
+                zS = repmat(reshape(z_fix,[],1,1),1,size(lon,1),size(lon,2));
+                PS = NaN(fixed_size); uS = PS; vS = PS; wS = PS; rhoS = PS;
+                avoS = PS; khS = PS; kvS = PS; RUBLTENS = PS; RVBLTENS = PS;
+                pvoS = PS; thetaS = PS; thetaES = PS; H_DIABATICS = PS;
                 for i=1:size(lon,1)
                     for j=1:size(lon,2)
                         [z_col,level_index] = unique_sorted_height(squeeze(z(:,i,j)));
@@ -119,7 +136,6 @@ for T = T_beg:T_frq:T_end
                             thetaES(:,i,j)     = interpolate_height(z_col,level_index,squeeze(thetaE(:,i,j)),z_fix);
                             H_DIABATICS(:,i,j) = interpolate_height(z_col,level_index,squeeze(H_DIABATIC(:,i,j)),z_fix);
                         else
-                            zS(:,i,j)          = z_fix;
                             PS(:,i,j)          = NaN(size(z_fix));
                             uS(:,i,j)          = NaN(size(z_fix));
                             vS(:,i,j)          = NaN(size(z_fix));
@@ -163,19 +179,9 @@ for T = T_beg:T_frq:T_end
             [dist,X,Y] = tc_great_circle_xy(lat,lon,lat_TC,lon_TC);
             x = X;
             y = Y;
-            mask(find(dist<=Radius)) = 1;
-
-            for i=1:size(x,1)
-                for j=1:size(x,2)
-                    if x(i,j)~=0||y(i,j)~=0
-                        phi(i,j) = get_angle(x(i,j),y(i,j))/180*pi;
-                        r(i,j)   = sqrt(x(i,j)^2+y(i,j)^2);
-                    else
-                        phi(i,j) = 0;
-                        r(i,j)   = 0;
-                    end
-                end
-            end
+            mask(dist<=Radius) = 1;
+            phi = mod(atan2(y,x),2*pi);
+            r   = hypot(x,y);
 
             [u,v] = VectorTrans_R2C(x,y,u,v);
             [Upbl,Vpbl] = VectorTrans_R2C(x,y,RUBLTEN,RVBLTEN);
@@ -184,6 +190,10 @@ for T = T_beg:T_frq:T_end
             lon = Car2Cly(r,phi,lon,Xc,Yc);
             lat = Car2Cly(r,phi,lat,Xc,Yc);
             f   = Car2Cly(r,phi,f  ,Xc,Yc);
+            output_size = [size(z,1),numel(PHI),numel(R)];
+            zS = NaN(output_size); PS = zS; uS = zS; vS = zS; wS = zS;
+            rhoS = zS; avoS = zS; khS = zS; kvS = zS; UpblS = zS; VpblS = zS;
+            pvoS = zS; thetaS = zS; thetaES = zS; H_DIABATICS = zS;
             for k=1:size(z,1)
                 zS(k,:,:)          = Car2Cly(r,phi,squeeze(z(k,:,:))         .*mask,Xc,Yc);
                 PS(k,:,:)          = Car2Cly(r,phi,squeeze(P(k,:,:))         .*mask,Xc,Yc);
@@ -218,8 +228,8 @@ for T = T_beg:T_frq:T_end
             thetaE     = thetaES;
             H_DIABATIC = H_DIABATICS;
             r          = repmat(reshape(R*1000,1,1,length(R)),size(z,1),length(PHI),1);
-            pv_theta   = ertel_pv_cyl(u,v,w,avo,theta,r,z,dR*1000,dPhi,rho);
-            pv_thetaE  = ertel_pv_cyl(u,v,w,avo,thetaE,r,z,dR*1000,dPhi,rho);
+            pv_theta   = ertel_pv_cyl(u,v,w,avo,theta,r,z,dR*1000,dPhi,rho,lat,PHI,Omega);
+            pv_thetaE  = ertel_pv_cyl(u,v,w,avo,thetaE,r,z,dR*1000,dPhi,rho,lat,PHI,Omega);
             pv_diff    = pv_thetaE - pv_theta;
             pv_theta_pvu  = pv_theta*1e6;
             pv_thetaE_pvu = pv_thetaE*1e6;
@@ -230,31 +240,30 @@ for T = T_beg:T_frq:T_end
             Save_file = [Save_nam,'_',T_name,'.mat'];
             save([Save_dir,'/',Save_file],...
                 'R','PHI','dR','dPhi',...
-                'IF_Zfix','z_hight',...
+                'IF_Zfix','z_hight','Omega',...
                 'TIME','lon','lat','z','r','P','f',...
                 'u','v','w','rho','avo','kh','kv','Upbl','Vpbl','pvo','pv_theta','pv_thetaE','pv_diff',...
                 'pv_theta_pvu','pv_thetaE_pvu','pv_diff_pvu',...
-                'theta','thetaE','H_DIABATIC',...
+                'theta','thetaE','H_DIABATIC','heating_components_available',...
                 'lon_TC','lat_TC','slp_TC','swd_TC','u_TC','v_TC','center_motion_method','TC_center_valid')
 
             clear TIME lon lat x y X Y Xc Yc z r P f
             clear u v w rho avo kh kv Upbl Vpbl RUBLTEN RVBLTEN pvo pv_theta pv_thetaE pv_diff pv_theta_pvu pv_thetaE_pvu pv_diff_pvu
             clear theta thetaE H_DIABATIC
-            clear H_MICRO H_RAD H_PBL H_CU phi dist mask
+            clear H_MICRO H_RAD H_PBL H_CU H_SHALLOW heating_components_available phi dist mask
         end
     end
 end
 
-function pv = ertel_pv_cyl(u,v,w,avo,b,r,z,dr,dPhi,rho)
+function pv = ertel_pv_cyl(u,v,w,avo,b,r,z,dr,dPhi,rho,lat,PHI,Omega)
 
 r_safe = r;
 r_safe(r_safe==0) = NaN;
 br = d_dr_3d(b,dr);
 bp = 1./r_safe.*d_phi_3d(b,dPhi);
 bz = d_z_3d(b,z);
-zeta_r   = 1./r_safe.*d_phi_3d(w,dPhi) - d_z_3d(v,z);
-zeta_phi = d_z_3d(u,z) - d_dr_3d(w,dr);
-pv = (zeta_r.*br + zeta_phi.*bp + avo.*bz)./rho;
+[eta_r,eta_phi,eta_z] = tc_absolute_vorticity_cyl(u,v,w,avo,r_safe,z,dr,dPhi,lat,PHI,Omega);
+pv = (eta_r.*br + eta_phi.*bp + eta_z.*bz)./rho;
 end
 
 function drv = d_dr_3d(v,dr)
