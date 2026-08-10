@@ -47,7 +47,7 @@ repository [start.m](start.m) script and shared tools.
 
 In `Pre/TC_pre_config.sh`, set `source_dir` to the read-only WRF experiment
 directory and set `filename` to the WRF prefix (normally `wrfout_d03*`).
-Each preprocessing `Run.sh` calls `link_wrf_data.sh`, which
+Each preprocessing `Run.sh` starts `Sub.sh` in the background; `Sub.sh` calls `link_wrf_data.sh`, which
 creates or refreshes symbolic links to the matching WRF files in its own
 `DATA` directory before starting NCL. Derived NetCDF fields are therefore
 written in the directory expected by the MATLAB modules.
