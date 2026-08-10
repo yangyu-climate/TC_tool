@@ -77,7 +77,9 @@ do i = 0,dimsizes(all_files)-1,1
 ;----------------------------------------------------------------------------
 ; Pressure vertical velocity
 ;----------------------------------------------------------------------------
-  varN  = "omega"
+  ; NCL WRFUserARW names this diagnostic "omg". Its earlier water-vapour
+  ; bug was fixed in NCL 6.4.0; retain omega as the exported interface name.
+  varN  = "omg"
   var   = wrf_user_getvar(a,varN,time)
   var@description  = "Pressure vertical velocity"
   var@units        = "Pa s-1"
