@@ -58,8 +58,12 @@ do i = 0,dimsizes(all_files)-1,1
 ;----------------------------------------------------------------------------
 ; Earth-relative 10m eastward wind
 ;----------------------------------------------------------------------------
-  uvmet10 = wrf_user_getvar(a,"uvmet10",time)
-  var   = uvmet10(0,:,:)
+  ; U10/V10 are WRF-grid-relative; rotate explicitly with map factors.
+  u10 = wrf_user_getvar(a,"U10",time)
+  v10 = wrf_user_getvar(a,"V10",time)
+  cosalpha = a->COSALPHA(0,:,:)
+  sinalpha = a->SINALPHA(0,:,:)
+  var   = u10*cosalpha - v10*sinalpha
   var@description = "Earth-relative 10m eastward wind"
   var@components = "eastward"
   fileO = fileSafe+"_U10.nc"
@@ -69,14 +73,17 @@ do i = 0,dimsizes(all_files)-1,1
 ;----------------------------------------------------------------------------
 ; Earth-relative 10m northward wind
 ;----------------------------------------------------------------------------
-  var   = uvmet10(1,:,:)
+  var   = u10*sinalpha + v10*cosalpha
   var@description = "Earth-relative 10m northward wind"
   var@components = "northward"
   fileO = fileSafe+"_V10.nc"
   fileS = addfile(fileO, "c")
   fileS->V10 = var
   delete(var)
-  delete(uvmet10)
+  delete(u10)
+  delete(v10)
+  delete(cosalpha)
+  delete(sinalpha)
 ;----------------------------------------------------------------------------
 ; 2km height Pressure
 ;----------------------------------------------------------------------------

@@ -396,8 +396,13 @@ do i = 0,dimsizes(all_files)-1,1
 ;----------------------------------------------------------------------------
 ; Earth-relative horizontal wind
 ;----------------------------------------------------------------------------
-  uvmet = wrf_user_getvar(a,"uvmet",time)
-  var   = uvmet(0,:,:,:)
+  ; ua/va are unstaggered WRF-grid-relative winds.  Rotate them explicitly
+  ; with the map factors so the MATLAB diagnostics receive east/north winds.
+  ua = wrf_user_getvar(a,"ua",time)
+  va = wrf_user_getvar(a,"va",time)
+  cosalpha = a->COSALPHA(0,:,:)
+  sinalpha = a->SINALPHA(0,:,:)
+  var   = ua*cosalpha - va*sinalpha
   var@description  = "Earth-relative eastward wind on mass points"
   var@units        = "m s-1"
   var@components    = "eastward"
@@ -408,7 +413,7 @@ do i = 0,dimsizes(all_files)-1,1
 ;----------------------------------------------------------------------------
 ; Earth-relative northward wind
 ;----------------------------------------------------------------------------
-  var   = uvmet(1,:,:,:)
+  var   = ua*sinalpha + va*cosalpha
   var@description  = "Earth-relative northward wind on mass points"
   var@units        = "m s-1"
   var@components    = "northward"
@@ -416,7 +421,10 @@ do i = 0,dimsizes(all_files)-1,1
   fileS = addfile(fileO, "c")
   fileS->v = var
   delete(var)
-  delete(uvmet)
+  delete(ua)
+  delete(va)
+  delete(cosalpha)
+  delete(sinalpha)
 ;----------------------------------------------------------------------------
 ; W Wind
 ;----------------------------------------------------------------------------
@@ -440,8 +448,11 @@ do i = 0,dimsizes(all_files)-1,1
 ;----------------------------------------------------------------------------
 ; Earth-relative 10m eastward wind
 ;----------------------------------------------------------------------------
-  uvmet10 = wrf_user_getvar(a,"uvmet10",time)
-  var   = uvmet10(0,:,:)
+  u10 = wrf_user_getvar(a,"U10",time)
+  v10 = wrf_user_getvar(a,"V10",time)
+  cosalpha = a->COSALPHA(0,:,:)
+  sinalpha = a->SINALPHA(0,:,:)
+  var   = u10*cosalpha - v10*sinalpha
   var@description = "Earth-relative 10m eastward wind"
   var@components = "eastward"
   fileO = fileSafe+"_U10.nc"
@@ -451,14 +462,17 @@ do i = 0,dimsizes(all_files)-1,1
 ;----------------------------------------------------------------------------
 ; Earth-relative 10m northward wind
 ;----------------------------------------------------------------------------
-  var   = uvmet10(1,:,:)
+  var   = u10*sinalpha + v10*cosalpha
   var@description = "Earth-relative 10m northward wind"
   var@components = "northward"
   fileO = fileSafe+"_V10.nc"
   fileS = addfile(fileO, "c")
   fileS->V10 = var
   delete(var)
-  delete(uvmet10)
+  delete(u10)
+  delete(v10)
+  delete(cosalpha)
+  delete(sinalpha)
 ;----------------------------------------------------------------------------
 
 end do

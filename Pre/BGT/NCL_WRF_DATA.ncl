@@ -417,11 +417,14 @@ do i = 0,dimsizes(all_files)-1,1
 ;----------------------------------------------------------------------------
 ; Earth-relative horizontal wind
 ;----------------------------------------------------------------------------
-  ; ua/va are grid-relative.  Every MATLAB diagnostic below subtracts an
-  ; east/north track velocity and then forms a geographic cylindrical basis,
-  ; so export the already unstaggered, earth-relative pair from WRFUserARW.
-  uvmet = wrf_user_getvar(a,"uvmet",time)
-  var   = uvmet(0,:,:,:)
+  ; ua/va are unstaggered WRF-grid-relative winds.  Every MATLAB diagnostic
+  ; below subtracts an east/north track velocity and forms a geographic
+  ; cylindrical basis, so rotate explicitly to earth-relative components.
+  ua = wrf_user_getvar(a,"ua",time)
+  va = wrf_user_getvar(a,"va",time)
+  cosalpha = a->COSALPHA(0,:,:)
+  sinalpha = a->SINALPHA(0,:,:)
+  var   = ua*cosalpha - va*sinalpha
   var@description  = "Earth-relative eastward wind on mass points"
   var@units        = "m s-1"
   var@components    = "eastward"
@@ -432,7 +435,7 @@ do i = 0,dimsizes(all_files)-1,1
 ;----------------------------------------------------------------------------
 ; Earth-relative northward wind
 ;----------------------------------------------------------------------------
-  var   = uvmet(1,:,:,:)
+  var   = ua*sinalpha + va*cosalpha
   var@description  = "Earth-relative northward wind on mass points"
   var@units        = "m s-1"
   var@components    = "northward"
@@ -440,7 +443,10 @@ do i = 0,dimsizes(all_files)-1,1
   fileS = addfile(fileO, "c")
   fileS->v = var
   delete(var)
-  delete(uvmet)
+  delete(ua)
+  delete(va)
+  delete(cosalpha)
+  delete(sinalpha)
 ;----------------------------------------------------------------------------
 ; W Wind
 ;----------------------------------------------------------------------------
@@ -471,8 +477,8 @@ do i = 0,dimsizes(all_files)-1,1
   ; earth-relative winds in the storm-following budgets.
   rub = wrf_user_getvar(a,"RUBLTEN",time)
   rvb = wrf_user_getvar(a,"RVBLTEN",time)
-  cosalpha = a->COSALPHA(time,:,:)
-  sinalpha = a->SINALPHA(time,:,:)
+  cosalpha = a->COSALPHA(0,:,:)
+  sinalpha = a->SINALPHA(0,:,:)
   var   = rub*cosalpha - rvb*sinalpha
   var@description  = "Earth-relative eastward wind tendency due to PBL parametrization"
   var@units        = "m s-2"
