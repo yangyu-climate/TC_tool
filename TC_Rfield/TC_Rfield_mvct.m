@@ -200,7 +200,12 @@ for T = T_beg:T_frq:T_end
         [u,v] = VectorTrans_R2C(x,y,u,v);
         
         r     = hypot(x,y)*1000;
-        M     = r.*v + 0.5*reshape(f,1,size(f,1),size(f,2)).*(r.^2);
+        % v is [level,y,x], while r and f are horizontal [y,x] fields.
+        % Put the horizontal fields on singleton level dimensions so the
+        % absolute angular momentum is evaluated at every vertical level.
+        r3    = reshape(r,1,size(r,1),size(r,2));
+        f3    = reshape(f,1,size(f,1),size(f,2));
+        M     = r3.*v + 0.5*f3.*(r3.^2);
         r     = r/1000;
 
         % Save Data
