@@ -68,7 +68,8 @@ for T = T_beg:T_frq:T_end
         file_name = filename.name(1:end-8);
         file_name = [Data_dir,'/',file_name];
         tc_assert_earth_relative_wind([file_name,'_u.nc'],[file_name,'_v.nc'])
-        tc_assert_earth_relative_wind([file_name,'_RUBLTEN.nc'],[file_name,'_RVBLTEN.nc'])
+        tc_assert_earth_relative_wind([file_name,'_RUBLTEN.nc'],[file_name,'_RVBLTEN.nc'],...
+            'RUBLTEN','RVBLTEN')
         % Basic Variables
         lon   = ncload_2D([file_name,'_lon.nc'] ,'lon');
         lat   = ncload_2D([file_name,'_lat.nc'] ,'lat');
